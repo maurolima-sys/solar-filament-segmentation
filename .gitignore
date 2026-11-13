@@ -6,3 +6,7 @@ weights/
 submission.csv
 CONTEXT.md
 .env
+report/*.pdf
+report/*.aux
+report/*.log
+report/*.out
