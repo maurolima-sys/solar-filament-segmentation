@@ -100,14 +100,18 @@ def train():
             x, y = x.to(dev), y.to(dev)
             with torch.autocast("cuda", enabled=dev == "cuda"):
                 o = model(x); loss = dice(o, y) + bce(o, y)
-            opt.zero_grad(); scaler.scale(loss).backward(); scaler.step(opt); scaler.update()
+            if not torch.isfinite(loss): continue
+            opt.zero_grad(); scaler.scale(loss).backward()
+            scaler.unscale_(opt); torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+            scaler.step(opt); scaler.update()
         model.eval(); vs = 0
         with torch.no_grad():
             for x, y in vl:
                 x, y = x.to(dev), y.to(dev)
                 with torch.autocast("cuda", enabled=dev == "cuda"):
                     o = model(x)
-                vs += (dice(o, y) + bce(o, y)).item() * len(x)
+                v = (dice(o, y) + bce(o, y)).item()
+                if torch.isfinite(torch.tensor(v)): vs += v * len(x)
         vs /= len(va); print(f"epoch {ep} val_loss {vs:.4f}")
         if vs < best:
             best = vs; torch.save(model.state_dict(), CFG["ckpt"])
