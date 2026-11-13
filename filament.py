@@ -14,9 +14,9 @@ from scipy import ndimage as ndi
 from pycocotools import mask as mu
 
 # ---------------- CONFIG ----------------
-ROOT = "/kaggle/input/competitions/filament-segmentation-2026/MAGFiLO_1.0_Kaggle_2026"
+ROOT = "/kaggle/input/competitions/filament-segmentation-2026/MAGFiLO_1.0_Kaggle_2026"  # confirmed path
 CFG = dict(
-    ann_json=f"{ROOT}/train/MAGFiLO_1.0_Annotations_kaggle2026_train.json",
+    ann_json=f"{ROOT}/train/MAGFiLO_Annotations_kaggle2026_train.json",
     train_dir=f"{ROOT}/train/train_images",
     test_dir=f"{ROOT}/test/test_images",
     size=512, bs=8, epochs=15, lr=3e-4, val_frac=0.1, seed=0,
