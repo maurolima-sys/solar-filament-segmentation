@@ -73,7 +73,7 @@ class TrainDS(Dataset):
 class TestDS(Dataset):
     def __init__(self, paths): self.paths = paths
     def __len__(self): return len(self.paths)
-    def __getitem__(self, i): return torch.from_numpy(small(load_gray(self.paths[i])))[None]
+    def __getitem__(self, i): return torch.from_numpy(small(load_gray(self.paths[i])).astype(np.float32))[None]
 
 def build(pretrained=True):
     return smp.Unet(CFG["encoder"], encoder_weights="imagenet" if pretrained else None, in_channels=1, classes=1)
@@ -110,7 +110,7 @@ def train():
                 vs += (dice(o, y) + bce(o, y)).item() * len(x)
         vs /= len(va); print(f"epoch {ep} val_loss {vs:.4f}")
         if vs < best:
-            best = vs; torch.save({k: v.half() for k, v in model.state_dict().items()}, CFG["ckpt"])
+            best = vs; torch.save(model.state_dict(), CFG["ckpt"])
     return model, [it for it in items if it[0] in val_files]
 
 # ---- TTA helpers ----
@@ -242,7 +242,7 @@ def collect_val_probs(model, val_items):
     probs, gts = [], []
     for fn, polys, h, w in val_items:
         img = load_gray(os.path.join(CFG["train_dir"], fn))
-        x = torch.from_numpy(small(img))[None, None].to(dev)
+        x = torch.from_numpy(small(img).astype(np.float32))[None, None].to(dev)
         pr = tta_predict(model, x)
         probs.append(cv2.resize(pr, (O, O), interpolation=cv2.INTER_LINEAR))
         gts.append(cv2.resize(poly_mask(polys, h, w), (O, O), interpolation=cv2.INTER_NEAREST))
@@ -253,7 +253,7 @@ def rle(mask):
 
 def predict(out_csv="submission.csv"):
     model = build(pretrained=False).to(dev)
-    model.load_state_dict({k: v.float() for k, v in torch.load(CFG["ckpt"], map_location=dev).items()})
+    model.load_state_dict(torch.load(CFG["ckpt"], map_location=dev))
     model.eval()
     paths = sorted(glob.glob(CFG["test_dir"] + "/*"))
     rows, O = [], CFG["out_size"]
