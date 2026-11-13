@@ -10,3 +10,9 @@ report/*.pdf
 report/*.aux
 report/*.log
 report/*.out
+.qodo/
+*.pdf
+*.zip
+logs*.txt
+download.txt
+*.log
