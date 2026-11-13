@@ -19,7 +19,7 @@ CFG = dict(
     ann_json=f"{ROOT}/train/MAGFiLO_Annotations_kaggle2026_train.json",
     train_dir=f"{ROOT}/train/train_images",
     test_dir=f"{ROOT}/test/test_images",
-    size=512, bs=8, epochs=15, lr=3e-4, val_frac=0.1, seed=0,
+    size=512, bs=8, epochs=15, lr=3e-4, val_frac=0.2, seed=0,
     # categories: 1=Left, 2=Right, 3=Unidentifiable, 4=Ambiguous
     exclude_cats={4},          # Ambiguous excluded; set to set() to include all
     # post-processing (per-component) — tune with tune_postprocess() on your val set
@@ -86,28 +86,32 @@ def train():
     tr = TrainDS([it for it in items if it[0] not in val_files], True)
     va = TrainDS([it for it in items if it[0] in val_files], False)
     print(len(tr), "train /", len(va), "val samples")
-    tl = DataLoader(tr, CFG["bs"], shuffle=True, num_workers=2)
-    vl = DataLoader(va, CFG["bs"], num_workers=2)
+    nw = 2 if os.name != "nt" and dev == "cuda" else 0
+    tl = DataLoader(tr, CFG["bs"], shuffle=True, num_workers=nw, pin_memory=dev=="cuda")
+    vl = DataLoader(va, CFG["bs"], num_workers=nw, pin_memory=dev=="cuda")
     model = build().to(dev)
     opt = torch.optim.AdamW(model.parameters(), CFG["lr"])
     dice, bce = smp.losses.DiceLoss("binary"), nn.BCEWithLogitsLoss()
-    scaler = torch.cuda.amp.GradScaler(enabled=dev == "cuda")
+    scaler = torch.amp.GradScaler("cuda", enabled=dev == "cuda")
     best = 1e9
     for ep in range(CFG["epochs"]):
         model.train()
         for x, y in tl:
             x, y = x.to(dev), y.to(dev)
-            with torch.autocast(dev, enabled=dev == "cuda"):
+            with torch.autocast("cuda", enabled=dev == "cuda"):
                 o = model(x); loss = dice(o, y) + bce(o, y)
             opt.zero_grad(); scaler.scale(loss).backward(); scaler.step(opt); scaler.update()
         model.eval(); vs = 0
         with torch.no_grad():
             for x, y in vl:
-                x, y = x.to(dev), y.to(dev); o = model(x)
+                x, y = x.to(dev), y.to(dev)
+                with torch.autocast("cuda", enabled=dev == "cuda"):
+                    o = model(x)
                 vs += (dice(o, y) + bce(o, y)).item() * len(x)
         vs /= len(va); print(f"epoch {ep} val_loss {vs:.4f}")
         if vs < best:
             best = vs; torch.save({k: v.half() for k, v in model.state_dict().items()}, CFG["ckpt"])
+    return model, [it for it in items if it[0] in val_files]
 
 # ---- TTA helpers ----
 _TTA = [
@@ -263,5 +267,8 @@ def predict(out_csv="submission.csv"):
     print(len(rows), "instances from", len(paths), "images saved to", out_csv)
 
 if __name__ == "__main__":
-    train()
+    model, val_items = train()
+    val_probs, val_gts = collect_val_probs(model, val_items)
+    best = tune_postprocess(val_probs, val_gts)
+    CFG.update(best)
     predict()
