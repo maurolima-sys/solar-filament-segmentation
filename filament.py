@@ -115,6 +115,9 @@ def train():
         vs /= len(va); print(f"epoch {ep} val_loss {vs:.4f}")
         if vs < best:
             best = vs; torch.save(model.state_dict(), CFG["ckpt"])
+    # fallback: save last model if best.pt was never written
+    if not os.path.exists(CFG["ckpt"]):
+        torch.save(model.state_dict(), CFG["ckpt"])
     return model, [it for it in items if it[0] in val_files]
 
 # ---- TTA helpers ----
