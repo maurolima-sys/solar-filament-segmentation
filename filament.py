@@ -91,7 +91,7 @@ def train():
     vl = DataLoader(va, CFG["bs"], num_workers=nw, pin_memory=dev=="cuda")
     model = build().to(dev)
     opt = torch.optim.AdamW(model.parameters(), CFG["lr"])
-    dice, bce = smp.losses.DiceLoss("binary"), nn.BCEWithLogitsLoss()
+    dice, bce = smp.losses.DiceLoss("binary", smooth=1.0), nn.BCEWithLogitsLoss()
     scaler = torch.amp.GradScaler("cuda", enabled=dev == "cuda")
     best = 1e9
     for ep in range(CFG["epochs"]):
