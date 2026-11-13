@@ -265,7 +265,7 @@ def predict(out_csv="submission.csv"):
     paths = sorted(glob.glob(CFG["test_dir"] + "/*"))
     rows, O = [], CFG["out_size"]
     for p in paths:
-        x = TestDS([p])[0][None, None].to(dev)          # (1,1,512,512)
+        x = TestDS([p])[0][None].to(dev)                  # (1,1,512,512)
         pr = tta_predict(model, x)                        # (512,512)
         pr = cv2.resize(pr, (O, O), interpolation=cv2.INTER_LINEAR)
         for j, inst in enumerate(postprocess(pr), 1):
