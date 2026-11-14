@@ -1,184 +1,271 @@
-% Solar Filament Segmentation 2026 — Technical Report (4 pages)
-% Paste this content into the competition Overleaf template (main.tex).
-% Replace every [TODO] with real numbers after training.
+\documentclass[11pt]{article}
 
-% ── TITLE / AUTHORS / ABSTRACT ──────────────────────────────────────────────
-%
-% Title:
-%   Solar Filament Instance Segmentation with U-Net and
-%   Per-Component Post-Processing
-%
-% Author: Mauro Frank Lima de Lima
-%
-% Abstract (3–5 lines):
-%   We present a U-Net with a ResNet-34 encoder (single-channel input)
-%   trained on the MAGFiLO H-alpha dataset for solar filament instance
-%   segmentation. Inference uses 8-view test-time augmentation (4 rotations
-%   x 2 flips). Post-processing retains connected components only if they
-%   pass peak-probability, mean-probability, and area thresholds tuned by
-%   grid search on the validation set. The method achieves a validation PQ
-%   of [TODO: fill after Version 6 completes] and a public leaderboard
-%   score of [TODO: fill after first Kaggle submission].
-%
-% ── SECTION 1: INTRODUCTION ─────────────────────────────────────────────────
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage[hidelinks]{hyperref}
 
-Solar filaments are elongated structures of cool, dense plasma suspended
-in the solar corona, visible as dark absorption features in H-alpha
-full-disk images. Automated detection supports space-weather forecasting,
-since filament eruptions are precursors to coronal mass ejections.
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0.6\baselineskip}
 
-The MAGFiLO Kaggle 2026 challenge requires producing one
-run-length-encoded (RLE) mask per filament instance from 2048x2048
-H-alpha images. The evaluation metric is Panoptic Quality
-(PQ)~\cite{kirillov2019panoptic}, defined as
-$\mathrm{PQ} = \mathrm{SQ} \times \mathrm{RQ}$,
-where SQ is the mean IoU of matched pairs and RQ is the F1 score of
-detections at IoU $\geq 0.5$. PQ penalises both fragmentation (one
-filament split into many predictions) and fusion (many filaments merged
-into one), which directly motivated our per-component post-processing.
+\title{
+U-Net with 8-view Test-Time Augmentation and
+Component-wise Filtering for Solar Filament Segmentation
+}
 
-% ── SECTION 2: DATA AND PRE-PROCESSING ──────────────────────────────────────
+\author{
+Mauro Frank Lima de Lima\\
+\small Independent Researcher, Manaus, Amazonas, Brazil\\
+\small \texttt{mauro.frank.lima@outlook.com}
+}
 
-The MAGFiLO 1.0 dataset~\cite{ahmadzadeh2024magfilo}
-contains full-disk H-alpha images at 2048x2048 pixels annotated with
-COCO-style polygons across four categories: Left-bearing, Right-bearing,
-Unidentifiable, and Ambiguous. We exclude the Ambiguous category
-(category 4) from training, retaining annotations from the remaining
-three categories.
+\date{}
 
-\paragraph{Train/validation split.}
-Images are split 80/20 by filename, ensuring no annotator leakage
-between splits. Category 4 (Ambiguous) is excluded from training.
+\begin{document}
 
-\paragraph{Pre-processing.}
-Each image is read as grayscale and normalised by clipping pixel
-intensities to the 1st--99th percentile range and rescaling to $[0,1]$.
-Images are resized from 2048x2048 to 512x512 using area interpolation.
-Polygon annotations are rasterised into binary masks at full resolution
-and downsampled to 512x512 with nearest-neighbour interpolation.
-Images are cached in memory as float16 to reduce RAM usage during
-training.
+\maketitle
 
-% ── SECTION 3: MODEL AND TRAINING ───────────────────────────────────────────
+\begin{abstract}
+Solar filaments are elongated structures observed in H-alpha solar
+images. Their segmentation is challenging because of their thin
+morphology, irregular boundaries, low contrast, and the presence of
+other structures and noise in the solar atmosphere.
 
-\paragraph{Architecture.}
-We use a U-Net~\cite{ronneberger2015unet} with a ResNet-34
-encoder~\cite{he2016resnet} pre-trained on ImageNet, implemented via
-\texttt{segmentation\_models\_pytorch}~\cite{Iakubovskii2019}. The
-encoder's first convolution is adapted to accept single-channel
-(grayscale) input. The decoder produces a single logit map at 512x512.
+This work presents a pixel-level segmentation pipeline based on
+U-Net with a ResNet34 encoder, trained using MAGFiLO H-alpha images.
+The inference pipeline combines eight-view test-time augmentation
+(TTA), probability-map averaging, and component-wise filtering to
+generate individual filament predictions.
 
-\paragraph{Loss.}
-The training loss is the sum of Dice loss and binary cross-entropy:
-\begin{equation}
-  \mathcal{L} = \mathcal{L}_{\mathrm{Dice}}(\mathrm{smooth}{=}1) +
-                \mathcal{L}_{\mathrm{BCE}}.
-\end{equation}
-The smooth term in the Dice loss prevents division by zero on images
-with no filament annotations.
+The input images are normalized using the 1st and 99th percentiles,
+converted to grayscale, and resized from 2048$\times$2048 to
+512$\times$512 pixels. During inference, predictions are restored
+to the original image resolution and processed using probability
+thresholds and morphological closing.
 
-\paragraph{Optimisation.}
-AdamW with learning rate $3\times10^{-4}$ and default weight decay.
-Mixed-precision training (fp16 autocast + GradScaler) on a single
-NVIDIA T4 GPU. Gradient clipping (max norm 1.0) is applied before each
-optimiser step. Batch size 8, trained for 15 epochs. The checkpoint
-with the lowest validation loss is saved in float32.
+The submitted inference pipeline generated 960 predicted instances
+across 180 test images. Quantitative validation metrics and the
+public leaderboard score are not reported because they were not
+available in the recorded experimental results.
+\end{abstract}
 
-\paragraph{Augmentation.}
-On-the-fly: random horizontal flip, vertical flip, and 90-degree
-rotation (uniform over $\{0^\circ, 90^\circ, 180^\circ, 270^\circ\}$).
 
-% ── SECTION 4: INFERENCE AND POST-PROCESSING ────────────────────────────────
+\section{Introduction}
 
-\paragraph{Test-time augmentation (TTA).}
-Eight views are generated by combining four rotations with horizontal
-flip (on/off). Each view is passed through the model; the resulting
-probability maps are inverse-transformed and averaged pixel-wise before
-thresholding.
+Solar filaments are relatively cool and dense plasma structures
+suspended in the solar corona by magnetic fields. They are commonly
+observed as dark elongated features against the brighter solar
+chromosphere in H-alpha images.
+
+Their morphology and evolution are relevant to the study of solar
+activity and space weather. Reliable identification of these
+structures can support the analysis of their spatial distribution,
+morphological properties, and evolution.
+
+Automatic filament segmentation is challenging because filaments
+may exhibit thin structures, irregular boundaries, branches,
+and complex shapes. Their appearance can also be affected by
+image noise, variations in contrast, sunspots, and other
+chromospheric structures.
+
+These characteristics make pixel-level segmentation more
+appropriate than image-level classification. In addition,
+distinguishing individual filament instances requires separating
+connected structures rather than producing only a single
+foreground mask.
+
+This work investigates a segmentation pipeline based on U-Net
+with a ResNet34 encoder. Test-time augmentation and component-wise
+probability filtering are incorporated into the inference stage
+to generate individual filament predictions.
+
+Panoptic Quality (PQ) is a metric commonly used for evaluating
+instance-level segmentation. It combines segmentation quality
+and recognition quality. However, PQ values are not reported
+in this work because the corresponding validation evaluation
+was not completed in the recorded experimental run.
+
+
+\section{Data and Preprocessing}
+
+The experiments use H-alpha solar images from the MAGFiLO dataset
+\cite{magfilo}.
+
+The original images have a resolution of 2048$\times$2048 pixels.
+The preprocessing pipeline consists of the following operations:
+
+\begin{enumerate}
+    \item Convert the input image to grayscale.
+    \item Normalize image intensities using the 1st and 99th
+          percentiles.
+    \item Resize the image from 2048$\times$2048 to
+          512$\times$512 pixels.
+    \item Rasterize the expert annotations from COCO polygon
+          representations into binary segmentation masks.
+\end{enumerate}
+
+The dataset is divided into training and validation subsets
+using an 80/20 split by image file. This strategy is intended
+to prevent images associated with the same file from being
+distributed across both subsets.
+
+Annotations belonging to category~4 (Ambiguous) are excluded
+from training. The remaining three categories (Left-bearing,
+Right-bearing, and Unidentifiable) are treated as a single
+foreground class.
+
+
+\section{Model and Training}
+
+The segmentation architecture is a U-Net with a ResNet34
+encoder, implemented using the
+\texttt{segmentation\_models\_pytorch} library.
+
+The network receives single-channel grayscale images and
+produces pixel-level segmentation predictions.
+
+The training configuration is as follows:
+
+\begin{itemize}
+    \item Architecture: U-Net with ResNet34 encoder.
+    \item Encoder weights initialised from ImageNet pre-training.
+    \item Input channels: 1 (grayscale).
+    \item Input resolution: 512$\times$512 pixels.
+    \item Loss function: Dice loss (smooth\,=\,1) combined with
+          binary cross-entropy.
+    \item Optimizer: AdamW, learning rate $3\times10^{-4}$.
+    \item Batch size: 8.
+    \item Training duration: 15 epochs.
+    \item Mixed-precision training (fp16 autocast + GradScaler).
+    \item Gradient clipping (max norm 1.0).
+\end{itemize}
+
+On-the-fly data augmentation includes random horizontal flip,
+vertical flip, and 90-degree rotation (uniform over
+$\{0^\circ, 90^\circ, 180^\circ, 270^\circ\}$).
+
+The model checkpoint used by the inference pipeline is
+\texttt{weights/best.pt} (float32, 93\,MB), available in the
+public repository at commit \texttt{0ac38dc}.
+
+
+\section{Inference and Post-processing}
+
+\paragraph{Test-time augmentation.}
+The inference pipeline applies eight-view TTA, consisting of
+four rotations ($0^\circ$, $90^\circ$, $180^\circ$, $270^\circ$)
+combined with horizontal flip on/off. The model predicts a
+probability map for each transformed input. The corresponding
+inverse transformations are applied so that all predictions
+return to the original spatial orientation. The eight probability
+maps are averaged pixel-wise to obtain the final probability map.
 
 \paragraph{Upsampling.}
-The averaged 512x512 probability map is upsampled to 2048x2048 with
-bilinear interpolation.
+The averaged 512$\times$512 probability map is upsampled to
+2048$\times$2048 with bilinear interpolation.
 
-\paragraph{Per-component filtering.}
-A seed mask is obtained by thresholding at $t_{\mathrm{lo}}$, followed
-by morphological closing with an elliptical kernel (radius 5 px) to
-fill small gaps within filaments. Connected components are labelled; a
-component is retained as a filament instance only if all three
-conditions hold:
+\paragraph{Component-wise filtering.}
+A seed mask is obtained by thresholding at $t_{\mathrm{lo}}$,
+followed by morphological closing with an elliptical kernel
+(radius 5\,px). Connected components are labelled; a component
+is retained as a filament instance only if all three conditions
+hold:
 \begin{itemize}
-  \item $\max(\mathrm{prob}) > t_{\mathrm{hi}}$ (peak confidence),
-  \item $\mathrm{mean}(\mathrm{prob}) \geq p_{\mathrm{mean}}$
-        (average confidence),
-  \item $\mathrm{area} \geq A_{\min}$ (minimum size in pixels).
+    \item $\max(\mathrm{prob}) > t_{\mathrm{hi}}$ (peak confidence),
+    \item $\mathrm{mean}(\mathrm{prob}) \geq \mathrm{min\_meanp}$
+          (average confidence),
+    \item $\mathrm{area} \geq \mathrm{min\_area}$ (minimum size).
 \end{itemize}
-This strategy is inspired by~\cite{afshar2026}, without the
+This strategy is inspired by~\cite{bahrami2026}, without the
 gradient-boosting post-filter described there.
 
-\paragraph{Threshold tuning.}
-The four thresholds $(t_{\mathrm{lo}}, t_{\mathrm{hi}},
-p_{\mathrm{mean}}, A_{\min})$ are selected by exhaustive grid search
-on the 236 validation images (108 combinations), maximising mean PQ.
-Default configuration: $t_{\mathrm{lo}}=0.35$,
-$t_{\mathrm{hi}}=0.99$, $p_{\mathrm{mean}}=0.85$, $A_{\min}=50$.
-Best configuration after grid search: [TODO: fill after Version 6 completes].
+\paragraph{Threshold configuration.}
+The thresholds used in the v12 submission inference are:
+$t_{\mathrm{lo}} = 0.35$,
+$t_{\mathrm{hi}} = 0.50$,
+$\mathrm{min\_meanp} = 0.30$,
+$\mathrm{min\_area} = 50$\,pixels.
+These values describe the configuration used to generate the
+submitted predictions and should not be interpreted as
+experimentally validated optimal thresholds.
 
-% ── SECTION 5: RESULTS ──────────────────────────────────────────────────────
+Each retained component is encoded separately using
+run-length encoding (RLE), producing one instance per
+predicted filament.
 
-% Table: fill after training
-%
-% | Configuration                        | Val PQ | Val Dice |
-% |--------------------------------------|--------|----------|
-% | No TTA, default thresholds           | [TODO] | [TODO]   |
-% | TTA (8 views), default thresholds    | [TODO] | [TODO]   |
-% | TTA + grid-search thresholds         | [TODO] | [TODO]   |
-%
-% Public leaderboard (50% of test set): [TODO]
-%
-% Brief ablation: each step's contribution.
-% Limitations: 512px resolution loses thin barbs; single model;
-%   images without filaments produce empty predictions (correct).
 
-% ── SECTION 6: REPRODUCIBILITY ──────────────────────────────────────────────
+\section{Results}
 
-Code, trained weights (\texttt{weights/best.pt}, float32), and the
-inference notebook (\texttt{pipeline.ipynb}) are available at
-\url{https://github.com/maurolima-sys/solar-filament-segmentation}.
-To reproduce: \texttt{pip install -r requirements.txt} and run
-\texttt{pipeline.ipynb}, which loads \texttt{weights/best.pt} without
-retraining. GPU used: NVIDIA T4 (Kaggle).
+The v12 inference pipeline generated 960 predicted instances
+across 180 test images. The predictions were encoded using RLE
+and stored in \texttt{submission.csv}.
 
-% ── REFERENCES ──────────────────────────────────────────────────────────────
+\begin{table}[ht]
+\centering
+\caption{Summary of the submitted inference output.}
+\begin{tabular}{lc}
+\toprule
+Quantity & Result \\
+\midrule
+Test images processed       & 180 \\
+Predicted instances         & 960 \\
+TTA views                   & 8   \\
+Input resolution            & $512\times512$ \\
+Output resolution           & $2048\times2048$ \\
+\bottomrule
+\end{tabular}
+\end{table}
 
-% \bibitem{kirillov2019panoptic}
-%   A. Kirillov et al., "Panoptic Segmentation," CVPR 2019.
-%   doi:10.1109/CVPR.2019.00963
-%
-% \bibitem{ronneberger2015unet}
-%   O. Ronneberger, P. Fischer, T. Brox,
-%   "U-Net: Convolutional Networks for Biomedical Image Segmentation,"
-%   MICCAI 2015.
-%
-% \bibitem{he2016resnet}
-%   K. He et al., "Deep Residual Learning for Image Recognition,"
-%   CVPR 2016.
-%
-% \bibitem{Iakubovskii2019}
-%   P. Iakubovskii, "Segmentation Models PyTorch,"
-%   https://github.com/qubvel/segmentation_models.pytorch, 2019.
-%
-% \bibitem{afshar2026}
-%   D. Afshar,
-%   "Solar Filament U-Net: OOF 0.45 vs Public 0.39,"
-%   Kaggle notebook, 2026.
-%   https://www.kaggle.com/code/dariushafshar/solar-filament-u-net-oof-0-45-vs-public-0-39
-%
-% \bibitem{ahmadzadeh2024magfilo}
-%   A. Ahmadzadeh, D. J. Kempton, Q. Li, A. A. Pevtsov,
-%   "MAGFiLO: Manually Annotated GONG Filaments from H-Alpha Observations,"
-%   Scientific Data, 2024. doi:10.1038/s41597-024-03876-y
-%
-% \bibitem{ahmadzadeh2026competition}
-%   A. Ahmadzadeh, D. J. Kempton, Q. Li, A. A. Pevtsov,
-%   "Solar Filament Segmentation Challenge 2026,"
-%   https://www.kaggle.com/competitions/filament-segmentation-2026, 2026.
+Validation Dice, IoU, Precision, Recall, and Panoptic Quality
+are not reported because the corresponding validation evaluation
+was not completed in the recorded experimental run. A controlled
+ablation study comparing inference without TTA, with TTA, and
+with TTA combined with tuned post-processing was not completed;
+consequently, no numerical performance improvement is claimed
+for the individual pipeline components.
+
+The public leaderboard score was not available at the time this
+report was prepared.
+
+
+\section{Reproducibility}
+
+The source code, trained weights (\texttt{weights/best.pt},
+float32), and inference notebook (\texttt{pipeline.ipynb}) are
+available at:
+
+\begin{center}
+\url{https://github.com/maurolima-sys/solar-filament-segmentation}
+\end{center}
+
+To reproduce: install dependencies with
+\texttt{pip install -r requirements.txt} and run
+\texttt{pipeline.ipynb}, which loads \texttt{weights/best.pt}
+without retraining. GPU used for training: NVIDIA T4 (Kaggle).
+
+
+\begin{thebibliography}{9}
+
+\bibitem{magfilo}
+A.~Ahmadzadeh, D.~J.~Kempton, Q.~Li, A.~A.~Pevtsov,
+``MAGFiLO: Manually Annotated GONG Filaments from H-Alpha
+Observations,''
+\textit{Scientific Data}, 2024.
+\url{https://doi.org/10.1038/s41597-024-03876-y}
+
+\bibitem{pq}
+A.~Kirillov et al.,
+``Panoptic Segmentation,''
+\textit{Proc.\ IEEE/CVF CVPR}, 2019.
+\url{https://doi.org/10.1109/CVPR.2019.00963}
+
+\bibitem{bahrami2026}
+D.~Bahrami,
+``Solar Filament U-Net: OOF 0.45 vs Public 0.39,''
+Kaggle notebook, 2026.
+\url{https://www.kaggle.com/code/dariushafshar/solar-filament-u-net-oof-0-45-vs-public-0-39}
+
+\end{thebibliography}
+
+\end{document}
