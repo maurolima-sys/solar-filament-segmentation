@@ -14,10 +14,17 @@ Usage (Kaggle notebook or local with data available):
 
 Outputs a results table to stdout and writes evaluate_results.json.
 """
-import json, random, cv2, numpy as np, torch
+import json, os, random, cv2, numpy as np, torch
 from scipy import ndimage as ndi
 
 import filament as F
+
+# ── Checkpoint path ───────────────────────────────────────────────────────────
+# filament.py sets CFG["ckpt"] = "/kaggle/working/best.pt".
+# On Kaggle, copy weights/best.pt there before running:
+#   import shutil; shutil.copy("/kaggle/working/repo/weights/best.pt", "/kaggle/working/best.pt")
+# Locally, override here:
+# F.CFG["ckpt"] = "weights/best.pt"
 
 # ── Ablation configurations ──────────────────────────────────────────────────
 VARIANTS = {
@@ -63,7 +70,12 @@ def _postprocess_cfg(prob_2048, cfg):
 
 
 def semantic_dice_iou(pred_bin, gt_bin):
-    """Pixel-level (semantic) Dice and IoU for one image."""
+    """Pixel-level (semantic) Dice and IoU for one image.
+
+    Note: this is a pixel-level (semantic) metric, not the official competition
+    metric. The competition uses Panoptic Quality (pq_score). Dice and IoU are
+    reported here as supplementary diagnostics only.
+    """
     inter = int((pred_bin & gt_bin).sum())
     pred_sum = int(pred_bin.sum())
     gt_sum = int(gt_bin.sum())
@@ -111,7 +123,7 @@ def evaluate():
             )
 
             # Probability map
-            img = F.load_gray(F.os.path.join(F.CFG["train_dir"], fn))
+            img = F.load_gray(os.path.join(F.CFG["train_dir"], fn))
             img_512 = F.small(img)
             prob_512 = _predict_prob(model, img_512, vcfg["tta"])
             prob_full = cv2.resize(prob_512, (O, O),
