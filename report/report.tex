@@ -1,6 +1,7 @@
 \documentclass[sigconf,nonacm]{acmart}
 
 \usepackage{booktabs}
+\usepackage{graphicx}
 
 \begin{document}
 
@@ -163,6 +164,10 @@ threshold $t_{\mathrm{lo}}$ is 0.35. Each retained component is
 encoded as a separate COCO run-length encoding (RLE) instance.
 Component-wise confidence filtering is related to prior solar
 filament post-processing work~\cite{afshar2026}.
+All thresholds are fixed for the submitted v13 output; no test
+labels or per-image manual adjustments are used. The output
+instances are therefore determined by one common inference and
+filtering configuration across the test set.
 
 
 \section{Evaluation}
@@ -199,6 +204,30 @@ The earlier v12 submission scored 0.00. The v13 result is higher,
 but the changed settings were not isolated in controlled ablations;
 no single change can be credited with the improvement.
 
+\subsection{Qualitative Test Predictions}
+
+Figure~\ref{fig:qualitative} shows two test images with different
+numbers of retained components. The colored masks in the middle
+column show the separate RLE instances, and the right column overlays
+those instances on the H-alpha input. The examples illustrate the
+format and spatial distribution of the submitted predictions, not
+segmentation accuracy: test ground-truth masks were not available
+for this analysis. The displayed cases were selected to show
+different output counts, not because they represent best or worst
+performance.
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=\textwidth,trim=0 0 0 2.45in,clip]{v13_qualitative.png}
+\caption{Representative v13 predictions on test images
+\texttt{20130206063154Uh} (10 retained instances) and
+\texttt{20140519195834Ch} (23 retained instances). From left to
+right: H-alpha input, individual predicted instances, and overlay.
+Colors distinguish RLE instances and do not encode confidence.
+These are test predictions without ground-truth comparison.}
+\label{fig:qualitative}
+\end{figure*}
+
 \subsection{Discussion and Limitations}
 
 The public score confirms that the v13 CSV was evaluated, but does
@@ -213,6 +242,28 @@ validation PQ or controlled threshold/TTA ablation was completed.
 Coverage recovery and threshold tuning on the v13 weights remain
 future work.
 
+Several design choices also limit what can be inferred from this
+experiment. Converting the three retained annotation categories
+into one foreground class discards their category distinctions.
+Resizing the full image to 1024$\times$1024 reduces spatial detail,
+while training on random 512$\times$512 crops exposes the model to
+local regions rather than always to the full solar disk. The
+threshold-and-component post-processing is simple and reproducible,
+but its area and confidence filters can exclude small or faint
+structures. Morphological closing can also alter the connectivity
+of nearby pixels; without instance-level validation, the magnitude
+of any resulting split or merge errors is unknown.
+
+The test-time pipeline uses one view, so it avoids the additional
+compute and probability averaging of TTA but does not measure
+whether such averaging would improve the score. The fixed thresholds
+were not selected through a completed v13 validation-PQ sweep.
+Consequently, neither the public score nor the crop-level Dice
+supports claims about the individual benefit of a model component,
+preprocessing operation, or post-processing threshold. A useful
+next experiment would evaluate full-image instance PQ on a held-out
+validation set, then compare one change at a time using identical
+weights and image splits.
 
 \subsection{Reproducibility}
 
@@ -228,8 +279,13 @@ To reproduce, install the packages listed in
 \path{requirements.txt} and run \path{pipeline.ipynb}. The notebook
 loads \path{weights/best.pt} without retraining or threshold
 retuning. It writes \path{submission_v13.csv}, reports missing
-image predictions, and validates the RLE output. The exact CSV is included in the
-repository. Training ran on a Kaggle GPU (CUDA).
+image predictions, and validates the RLE output. The exact CSV is
+included in the repository so the generated rows can be compared
+against the submitted artifact. The inference settings reported
+here are 1024-pixel input, no TTA, $t_{\mathrm{lo}}=0.35$,
+component peak probability $>0.50$, mean probability $\geq0.30$,
+and minimum area 50 pixels. Training ran on a Kaggle GPU (CUDA);
+inference can run on CPU or GPU.
 
 \section{Acknowledgment}
 
