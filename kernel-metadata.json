@@ -1,0 +1,14 @@
+{
+  "id": "maurofranklimadelima/solar-filament-fixed-inference",
+  "title": "Solar Filament Fixed Inference",
+  "code_file": "kaggle_submit.ipynb",
+  "language": "python",
+  "kernel_type": "notebook",
+  "is_private": false,
+  "enable_gpu": true,
+  "enable_tpu": false,
+  "enable_internet": true,
+  "dataset_sources": [],
+  "competition_sources": ["filament-segmentation-2026"],
+  "kernel_sources": []
+}

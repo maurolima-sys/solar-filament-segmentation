@@ -14,7 +14,7 @@ from scipy import ndimage as ndi
 from pycocotools import mask as mu
 
 # ---------------- CONFIG ----------------
-ROOT = "/kaggle/input/competitions/filament-segmentation-2026/MAGFiLO_1.0_Kaggle_2026"  # confirmed path
+ROOT = next(iter(__import__('glob').glob('/kaggle/input/**/MAGFiLO_1.0_Kaggle_2026', recursive=True)), "/kaggle/input/filament-segmentation-2026/MAGFiLO_1.0_Kaggle_2026")
 CFG = dict(
     ann_json=f"{ROOT}/train/MAGFiLO_1.0_Annotations_kaggle2026_train.json",
     train_dir=f"{ROOT}/train/train_images",
@@ -23,7 +23,7 @@ CFG = dict(
     # categories: 1=Left, 2=Right, 3=Unidentifiable, 4=Ambiguous
     exclude_cats={4},          # Ambiguous excluded; set to set() to include all
     # post-processing (per-component) — tune with tune_postprocess() on your val set
-    t_lo=0.35, t_hi=0.99, min_meanp=0.85, min_area=50,
+    t_lo=0.35, t_hi=0.50, min_meanp=0.30, min_area=50,
     close_k=5, out_size=2048,
     encoder="resnet34", ckpt="/kaggle/working/best.pt",
 )
