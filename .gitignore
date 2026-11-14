@@ -2,7 +2,7 @@ __pycache__/
 *.pyc
 .ipynb_checkpoints/
 reference/
-weights/
+weights/*.pt.bak
 submission.csv
 CONTEXT.md
 .env
