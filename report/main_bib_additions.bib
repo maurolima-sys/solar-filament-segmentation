@@ -1,7 +1,8 @@
 % ============================================================
 % ADD THESE ENTRIES TO THE END OF main.bib IN OVERLEAF.
-% The template already has ahmadzadeh2024dataset and
-% filament-segmentation-2026 — do NOT duplicate them.
+% Check first: if the template's main.bib already has
+% ahmadzadeh2024dataset or filament-segmentation-2026,
+% do NOT add those again — use the template's version.
 % ============================================================
 
 @inproceedings{kirillov2019panoptic,
@@ -30,8 +31,30 @@
 }
 
 @misc{afshar2026,
-  author = {Dariush Afshar},
-  title  = {Solar Filament {U-Net}: {OOF} 0.45 vs Public 0.39},
-  year   = {2026},
+  author       = {Dariush Afshar},
+  title        = {Solar Filament {U-Net}: {OOF} 0.45 vs Public 0.39},
+  year         = {2026},
   howpublished = {\url{https://www.kaggle.com/code/dariushafshar/solar-filament-u-net-oof-0-45-vs-public-0-39}}
+}
+
+% --- Only add the two entries below if main.bib does NOT already have them ---
+
+@article{ahmadzadeh2024dataset,
+  author  = {Ahmadzadeh, Azim and Adhyapak, Shreekant and Chaurasiya, Ankit
+             and Kempton, Dustin J. and Li, Qin and Martens, Petrus C. H.
+             and Pevtsov, Alexei A. and Seelamneni, Sai Teja},
+  title   = {A dataset of manually annotated filaments from {H}-alpha observations},
+  journal = {Scientific Data},
+  volume  = {11},
+  pages   = {1031},
+  year    = {2024},
+  doi     = {10.1038/s41597-024-03876-y}
+}
+
+@misc{filament-segmentation-2026,
+  author       = {Ahmadzadeh, Azim and Kempton, Dustin J. and Li, Qin and Pevtsov, Alexei A.},
+  title        = {Solar Filament Segmentation Challenge 2026},
+  howpublished = {Kaggle},
+  year         = {2026},
+  url          = {https://www.kaggle.com/competitions/filament-segmentation-2026}
 }
