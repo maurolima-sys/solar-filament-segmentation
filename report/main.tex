@@ -47,7 +47,11 @@ We train a U-Net with a ResNet34 encoder on MAGFiLO images resized to 1024$\time
 
 This report goes over the details of our submitted solution to the Solar Filament Segmentation Challenge~2026 \cite{filament-segmentation-2026}. The challenge, launched on July~10,~2026, is organized by the Earth-Space AI Research (ESAIR) Lab\footnote{\href{https://www.esairlab.com/home}{www.esairlab.com/}}. This challenge utilizes the MAGFiLO dataset for evaluation of the segmentation algorithms \cite{ahmadzadeh2024dataset}.
 
-Our approach converts a foreground probability map into individual instances using thresholding, morphological closing, and connected components. The primary competition metric is Panoptic Quality (PQ)~\cite{kirillov2019panoptic}. No v13 validation PQ was measured; the crop-level Dice reported here is a separate diagnostic. The v13 experiment changed input resolution, training crops, loss weighting, and inference resolution relative to v12; since these changes were not tested in controlled ablations, their individual contributions are unknown.
+Our approach converts a foreground probability map into individual instances using thresholding, morphological closing, and connected components. The primary competition metric is Panoptic Quality (PQ)~\cite{kirillov2019panoptic}, defined as
+\begin{equation}
+\mathrm{PQ} = \frac{\sum_{(p,g)\in\mathrm{TP}} \mathrm{IoU}(p,g)}{|\mathrm{TP}| + \tfrac{1}{2}|\mathrm{FP}| + \tfrac{1}{2}|\mathrm{FN}|},
+\end{equation}
+where a predicted instance $p$ is matched to ground-truth instance $g$ when $\mathrm{IoU}(p,g)\geq0.5$. The exact evaluator is provided by the competition organisers. No v13 validation PQ was measured; the crop-level Dice reported here is a separate diagnostic. The v13 experiment changed input resolution, training crops, loss weighting, and inference resolution relative to v12; since these changes were not tested in controlled ablations, their individual contributions are unknown.
 
 % ============================================================
 \section{Methodology}
@@ -214,6 +218,32 @@ run-length encoded (RLE) row in the submission CSV.
 \section{Evaluation}
 % ============================================================
 
+\begin{table}[h]
+\caption{Full v13 training and inference configuration, from the logged
+\texttt{cfg} field in \texttt{train\_history.json}.}
+\label{tab:cfg}
+\begin{tabular}{ll}
+\toprule
+Parameter & Value \\
+\midrule
+Encoder & resnet34 \\
+Input size & $1024\times1024$ \\
+Crop size (training) & $512\times512$ \\
+Batch size & 4 \\
+Epochs & 35 \\
+Learning rate & $5\times10^{-4}$ \\
+Val.\ fraction & 0.20 (seed 0) \\
+\texttt{pos\_weight} & 20 \\
+$t_{\mathrm{lo}}$ & 0.35 \\
+$t_{\mathrm{hi}}$ & 0.50 \\
+\texttt{min\_meanp} & 0.30 \\
+\texttt{min\_area} & 50 px \\
+Closing kernel & $5\times5$ ellipse \\
+Output size & $2048\times2048$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
 \subsection{Results}
 
 \begin{table}[h]
@@ -260,16 +290,17 @@ Colors distinguish instances. Test ground truth was not available.}
 \subsection{Strengths, Weaknesses, and Improvements}
 
 \textbf{Strengths.} The pipeline is simple and fully reproducible:
-fixed thresholds, no TTA, one checkpoint. The ResNet34 encoder
-provides strong pretrained features for a single-channel input.
-The component-wise filtering (peak, mean, area) reduces false
-positives from low-confidence blobs without requiring a separate
+fixed thresholds, no TTA, one checkpoint. The ResNet34 encoder was initialised with ImageNet weights and
+adapted to single-channel input.
+The component-wise filtering (peak, mean, area) is intended to reduce
+false positives from low-confidence blobs without requiring a separate
 classifier.
 
 \textbf{Weaknesses.} No v13 validation PQ was measured; the
 crop-level Dice is a proxy metric that does not directly optimise
-the competition objective. Two test images have no predictions,
-suggesting the model misses some filaments entirely. Resizing to
+the competition objective. Two test images have no predictions; without test annotations it is
+not possible to determine whether these are false negatives or images
+without filaments. Resizing to
 1024 px reduces spatial detail for small or thin filaments; random
 crops expose the model to local regions rather than the full solar
 disk context. The fixed thresholds were not selected by a completed
@@ -297,7 +328,7 @@ Code, the checkpoint (\path{weights/best.pt}), and inference notebook
 \end{center}
 Install with \texttt{pip install -r requirements.txt} and run
 \path{pipeline.ipynb}. The notebook loads \path{weights/best.pt}
-without retraining and writes \path{submission\_v13.csv}. The exact
+without retraining and writes \path{submission_v13.csv}. The exact
 CSV is included in the repository. Inference runs on CPU or GPU.
 
 % ============================================================
