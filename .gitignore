@@ -16,5 +16,7 @@ report/*.out
 logs*.txt
 download.txt
 *.log
+MAGFiLO_1.0_Annotations_kaggle2026_train.json
+download*.txt
 notebook602b31390f.ipynb
 Screenshot*.png

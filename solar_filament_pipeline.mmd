@@ -1,0 +1,35 @@
+flowchart LR
+  subgraph TRAIN["TRAINING · MAGFiLO H-alpha"]
+    A["H-alpha images<br/>+ COCO polygons"] --> B["Preprocess<br/>1–99 percentile normalization<br/>2048 → 512 · grayscale<br/>Rasterize polygon masks"]
+    B --> C["80/20 train–validation split<br/>by image file"]
+    C --> D["U-Net · ResNet34 encoder<br/>1-channel input<br/>Dice + BCE · AdamW · fp16"]
+    D --> E["Trained weights<br/>best.pt"]
+    C --> V["Validation set"]
+    V --> G["Grid search<br/>post-processing thresholds"]
+  end
+
+  subgraph INFER["INFERENCE · TEST IMAGES"]
+    I["Test H-alpha image"] --> J["Same preprocessing<br/>2048 → 512 · grayscale"]
+    J --> K["U-Net prediction"]
+    E -. "model weights" .-> K
+    K --> L["8-view TTA<br/>4 rotations × 2 flips<br/>Average probabilities"]
+    L --> M["Upsample probability map<br/>to 2048 × 2048"]
+    M --> N["Seed mask at t_lo<br/>+ morphological closing"]
+    N --> O["Filter each component<br/>peak_prob > t_hi<br/>mean_prob ≥ min_meanp<br/>area ≥ min_area"]
+    G -. "selected thresholds" .-> O
+    O --> P["One RLE per filament"]
+    P --> Q["submission.csv"]
+  end
+
+  classDef data fill:#eef4fa,stroke:#23476a,color:#142b40,stroke-width:1.5px;
+  classDef process fill:#f5f7fa,stroke:#54718d,color:#142b40,stroke-width:1.5px;
+  classDef model fill:#dce8f4,stroke:#23476a,color:#102a43,stroke-width:2px;
+  classDef threshold fill:#fff0dc,stroke:#d97706,color:#633b08,stroke-width:1.7px;
+  classDef output fill:#ffedd5,stroke:#c25b12,color:#54280a,stroke-width:2px;
+  class A,I,V data;
+  class B,C,J,L,M,N process;
+  class D,E,K model;
+  class G,O threshold;
+  class P,Q output;
+  style TRAIN fill:#f8fbff,stroke:#9bb3ca,stroke-width:1px
+  style INFER fill:#fffaf3,stroke:#e8b779,stroke-width:1px
