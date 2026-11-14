@@ -99,12 +99,24 @@ are merged into one foreground class.
 \subsection{Model and Training}
 
 The architecture is \texttt{smp.Unet("resnet34",
-in\_channels=1)}~\cite{ronneberger2015unet,he2016resnet}. Training
-configuration: Dice loss (smooth\,=\,1) + BCE with
-\texttt{pos\_weight=20}; AdamW, $\mathrm{lr}=5\times10^{-4}$;
-batch~4; 35 epochs (best at epoch~33); 3-epoch linear warm-up then
-cosine decay; fp16 + GradScaler; gradient clip 1.0. Augmentation:
-random horizontal/vertical flip and 90-degree rotation.
+in\_channels=1)}~\cite{ronneberger2015unet,he2016resnet}. The
+ResNet34 encoder is initialised with ImageNet weights and adapted
+to single-channel input by averaging the first convolutional layer
+weights across the three colour channels.
+
+Training configuration: Dice loss (smooth\,=\,1) + BCE with
+\texttt{pos\_weight=20}; AdamW, $\mathrm{lr}=5\times10^{-4}$,
+weight decay $10^{-2}$; batch~4; 35 epochs (best at epoch~33);
+3-epoch linear warm-up then cosine decay to $10^{-6}$; fp16 mixed
+precision with GradScaler; gradient clip 1.0. Augmentation: random
+horizontal/vertical flip and 90-degree rotation applied jointly to
+image and mask.
+
+The \texttt{pos\_weight=20} was chosen to compensate for the severe
+foreground/background imbalance: filament pixels represent roughly
+1--5\% of each image. The Dice term stabilises training when
+positive pixels are sparse; the weighted BCE term provides
+pixel-level gradient signal.
 
 Validation Dice is computed at threshold 0.5 on random 512-pixel
 crops from the resized validation images. It is a crop-level
@@ -114,12 +126,20 @@ diagnostic, not a full-image or instance-level metric.
 
 Each test image is resized to 1024$\times$1024 and processed by one
 forward pass (no TTA). The probability map is upsampled to
-2048$\times$2048 with bilinear interpolation. A seed mask is formed
-at $t_{\mathrm{lo}}=0.35$ and closed with a 5$\times$5 elliptical
-kernel. A connected component is retained as one instance when:
-peak probability $>0.50$, mean probability $\geq0.30$, and area
-$\geq50$ pixels~\cite{afshar2026}. All thresholds are fixed; no
-per-image adjustment is applied.
+2048$\times$2048 with bilinear interpolation.
+
+Post-processing proceeds in four steps. (1)~A binary seed mask is
+formed by thresholding at $t_{\mathrm{lo}}=0.35$. (2)~The seed mask
+is morphologically closed with a 5$\times$5 elliptical structuring
+element to bridge small gaps within filament bodies. (3)~Connected
+components are extracted from the closed mask. (4)~Each component is
+retained as one predicted instance if and only if all three criteria
+are satisfied: peak probability $>t_{\mathrm{hi}}=0.50$, mean
+probability over the component $\geq\mathrm{min\_meanp}=0.30$, and
+component area $\geq\mathrm{min\_area}=50$ pixels~\cite{afshar2026}.
+All thresholds are fixed across all test images; no per-image
+adjustment is applied. Each retained component is encoded as one
+run-length encoded (RLE) row in the submission CSV.
 
 % ============================================================
 \section{Evaluation}
@@ -173,19 +193,31 @@ Colors distinguish instances. Test ground truth was not available.}
 \textbf{Strengths.} The pipeline is simple and fully reproducible:
 fixed thresholds, no TTA, one checkpoint. The ResNet34 encoder
 provides strong pretrained features for a single-channel input.
+The component-wise filtering (peak, mean, area) reduces false
+positives from low-confidence blobs without requiring a separate
+classifier.
 
-\textbf{Weaknesses.} No v13 validation PQ was measured. Two test
-images have no predictions. Resizing to 1024 px reduces spatial
-detail; random crops expose the model to local regions rather than
-the full solar disk. The fixed thresholds were not selected by a
-completed PQ sweep on v13 weights. Merging three annotation
-categories into one foreground class discards category distinctions.
+\textbf{Weaknesses.} No v13 validation PQ was measured; the
+crop-level Dice is a proxy metric that does not directly optimise
+the competition objective. Two test images have no predictions,
+suggesting the model misses some filaments entirely. Resizing to
+1024 px reduces spatial detail for small or thin filaments; random
+crops expose the model to local regions rather than the full solar
+disk context. The fixed thresholds were not selected by a completed
+PQ sweep on v13 weights. Merging three annotation categories
+(filament types) into one foreground class discards category
+distinctions that may be relevant to the evaluation.
 
 \textbf{Improvements.} Full-image instance PQ on a held-out
-validation set would enable principled threshold selection. TTA,
-larger input resolution, and multi-scale training are natural next
-steps. A controlled ablation varying one setting at a time would
-clarify which changes drive the score.
+validation set would enable principled threshold selection.
+Test-time augmentation (horizontal flip, vertical flip, and their
+combination) is a low-cost way to improve boundary consistency.
+Larger input resolution (e.g.\ 2048 px end-to-end) would preserve
+fine filament structure. Multi-scale training and overlapping-tile
+inference are natural next steps. A controlled ablation varying one
+setting at a time would clarify which changes drive the score.
+Separating the three annotation categories into distinct output
+channels could improve both detection and classification accuracy.
 
 \subsection{Reproducibility}
 
