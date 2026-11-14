@@ -28,17 +28,21 @@ import filament as F
 
 # ── Ablation configurations ──────────────────────────────────────────────────
 VARIANTS = {
-    "A_no_tta_default": dict(
+    "A_no_tta_loose": dict(
         tta=False,
-        t_lo=0.35, t_hi=0.99, min_meanp=0.85, min_area=50,
+        t_lo=0.35, t_hi=0.50, min_meanp=0.30, min_area=50,
     ),
-    "B_tta_default": dict(
-        tta=True,
-        t_lo=0.35, t_hi=0.99, min_meanp=0.85, min_area=50,
-    ),
-    "C_tta_v12": dict(
+    "B_tta_loose": dict(
         tta=True,
         t_lo=0.35, t_hi=0.50, min_meanp=0.30, min_area=50,
+    ),
+    "C_tta_mid": dict(
+        tta=True,
+        t_lo=0.25, t_hi=0.45, min_meanp=0.30, min_area=50,
+    ),
+    "D_tta_tight": dict(
+        tta=True,
+        t_lo=0.35, t_hi=0.70, min_meanp=0.50, min_area=50,
     ),
 }
 
@@ -108,6 +112,15 @@ def evaluate():
     val_items = get_val_items()
     print(f"Evaluating on {len(val_items)} validation items "
           f"({len({it[0] for it in val_items})} unique images)\n")
+
+    # Diagnose probability range on first 5 images
+    print("--- prob diagnostics (first 5 val images, TTA) ---")
+    for fn, polys, h, w in val_items[:5]:
+        img = F.load_gray(os.path.join(F.CFG["train_dir"], fn))
+        x = torch.from_numpy(F.small(img).astype(np.float32))[None, None].to(F.dev)
+        p = F.tta_predict(model, x)
+        print(f"  {fn}: max={p.max():.4f} mean={p.mean():.4f} p95={np.percentile(p,95):.4f}")
+    print()
 
     O = F.CFG["out_size"]   # 2048
     results = {}
