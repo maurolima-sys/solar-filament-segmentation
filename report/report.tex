@@ -1,29 +1,18 @@
-\documentclass[10pt]{article}
+\documentclass[sigconf,nonacm]{acmart}
 
-\usepackage[margin=0.7in]{geometry}
-\usepackage{amsmath,amssymb}
-\usepackage{graphicx}
 \usepackage{booktabs}
-\usepackage[hidelinks]{hyperref}
-
-\setlength{\parindent}{0pt}
-\setlength{\parskip}{0.3\baselineskip}
-
-\title{
-Solar Filament Segmentation with U-Net and ResNet34:
-The v13 Training and Inference Pipeline
-}
-
-\author{
-Mauro Frank Lima de Lima\\
-\small Independent Researcher, Market Harborough, United Kingdom\\
-}
-
-\date{}
 
 \begin{document}
 
-\maketitle
+\title{Solar Filament Segmentation with U-Net and ResNet34}
+\subtitle{A Solution to the Solar Filament Segmentation Challenge 2026}
+
+\author{Mauro Frank Lima de Lima}
+\affiliation{%
+  \institution{Independent Researcher}
+  \city{Market Harborough}
+  \country{United Kingdom}
+}
 
 \begin{abstract}
 Solar filaments are elongated structures observed in H-alpha solar
@@ -45,11 +34,14 @@ original resolution and separated into connected components using
 fixed confidence and area thresholds.
 
 The v13 checkpoint achieved a validation Dice of 0.6275 on
-512$\times$512 validation crops and a public leaderboard score of
+512-pixel validation crops and a public leaderboard score of
 0.28. Its CSV contains 1,790 instances from 178 of 180 test images;
 two images had no retained instances.
 \end{abstract}
 
+\keywords{Solar filaments, H-alpha, U-Net, panoptic quality, MAGFiLO}
+
+\maketitle
 
 \section{Introduction}
 
@@ -73,10 +65,11 @@ inference resolution. Since these changes were not tested in
 controlled ablations, their individual contributions are unknown.
 
 
-\newpage
-\section{Data and Preprocessing}
+\section{Methodology}
 
-The experiments use H-alpha solar images from the MAGFiLO dataset
+\subsection{Data and Preprocessing}
+
+The experiments use H-alpha images from the MAGFiLO dataset
 \cite{magfilo}.
 
 The original images have a resolution of 2048$\times$2048 pixels.
@@ -106,7 +99,7 @@ Right-bearing, and Unidentifiable) are treated as a single
 foreground class.
 
 
-\section{Model and Training}
+\subsection{Model and Training}
 
 The segmentation architecture is a U-Net~\cite{unet} with a ResNet34
 encoder, implemented using the
@@ -137,9 +130,8 @@ The training configuration is as follows:
     \item Gradient clipping (max norm 1.0).
 \end{itemize}
 
-On-the-fly data augmentation includes random horizontal flip,
-vertical flip, and 90-degree rotation (uniform over
-$\{0^\circ, 90^\circ, 180^\circ, 270^\circ\}$).
+On-the-fly data augmentation includes random horizontal and vertical
+flips and rotations by 0, 90, 180, or 270 degrees.
 
 The reported validation Dice uses a 0.5 probability threshold
 and is averaged over 512$\times$512 crops from resized validation
@@ -147,18 +139,16 @@ images. The validation dataset also samples a random crop per
 item, so this value is a crop-level diagnostic rather than a
 full-image semantic score or an instance-level metric.
 
-The model checkpoint used by the inference pipeline is
-\texttt{weights/best.pt} (float32, 97.9\,MB).
+The inference pipeline uses \path{weights/best.pt} (float32,
+97.9\,MB).
 
 
-\newpage
-\section{Inference and Post-processing}
+\subsection{Inference and Post-processing}
 
 \paragraph{Single-view inference.}
-Each grayscale test image is resized to 1024$\times$1024 and
-processed once by the model. The v13 submission does not use
-test-time augmentation; no spatial transforms or probability-map
-averaging are applied at inference.
+Each grayscale test image is resized to a 1024-pixel square and
+processed once by the model, without spatial transforms or
+probability-map averaging.
 
 \paragraph{Upsampling.}
 The 1024$\times$1024 probability map is upsampled to
@@ -175,7 +165,9 @@ Component-wise confidence filtering is related to prior solar
 filament post-processing work~\cite{afshar2026}.
 
 
-\section{Results}
+\section{Evaluation}
+
+\subsection{Results}
 
 The inference process examined all 180 test images and generated
 1,790 predicted instances from 178 images. The two remaining
@@ -207,8 +199,7 @@ The earlier v12 submission scored 0.00. The v13 result is higher,
 but the changed settings were not isolated in controlled ablations;
 no single change can be credited with the improvement.
 
-\newpage
-\section{Discussion and Limitations}
+\subsection{Discussion and Limitations}
 
 The public score confirms that the v13 CSV was evaluated, but does
 not establish that predictions are complete or optimal. Two test
@@ -219,29 +210,31 @@ masks.
 The validation Dice of 0.6275 is calculated over random crops and
 does not directly measure full-image instance quality. No v13
 validation PQ or controlled threshold/TTA ablation was completed.
-An earlier CPU sweep (PQ 0.0000, Dice 0.1144) used the older
-\texttt{best.pt} checkpoint and does not evaluate v13. Future work
-should test coverage recovery and threshold tuning on the v13 weights.
+Coverage recovery and threshold tuning on the v13 weights remain
+future work.
 
 
-\section{Reproducibility}
+\subsection{Reproducibility}
 
-The source code, trained weights (\texttt{weights/best.pt},
-float32), and inference notebook (\texttt{pipeline.ipynb}) are
+The source code, trained weights (\path{weights/best.pt},
+float32), and inference notebook (\path{pipeline.ipynb}) are
 available at:
 
 \begin{center}
 \url{https://github.com/maurolima-sys/solar-filament-segmentation}
 \end{center}
 
-To reproduce: install dependencies with
-\texttt{pip install -r requirements.txt} and run
-\texttt{pipeline.ipynb}, which loads \texttt{weights/best.pt}
-without retraining or threshold retuning. It writes
-\texttt{submission\_v13.csv}, reports missing image predictions,
-and validates the RLE output. The exact CSV is included in the
+To reproduce, install the packages listed in
+\path{requirements.txt} and run \path{pipeline.ipynb}. The notebook
+loads \path{weights/best.pt} without retraining or threshold
+retuning. It writes \path{submission_v13.csv}, reports missing
+image predictions, and validates the RLE output. The exact CSV is included in the
 repository. Training ran on a Kaggle GPU (CUDA).
 
+\section{Acknowledgment}
+
+The author thanks the MAGFiLO dataset contributors and the
+competition organizers for making the data and challenge available.
 
 \begin{thebibliography}{9}
 
