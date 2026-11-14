@@ -8,9 +8,11 @@
 \documentclass[sigconf]{acmart}
 \input{preamble}
 
-% TikZ for pipeline diagram
+% TikZ for pipeline diagram and training curve
 \usepackage{tikz}
 \usetikzlibrary{arrows.meta,fit,positioning}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.18}
 
 \guideStylefalse   % <-- disables grey guide text
 
@@ -99,24 +101,54 @@ are merged into one foreground class.
 \subsection{Model and Training}
 
 The architecture is \texttt{smp.Unet("resnet34",
-in\_channels=1)}~\cite{ronneberger2015unet,he2016resnet}. The
-ResNet34 encoder is initialised with ImageNet weights and adapted
-to single-channel input by averaging the first convolutional layer
-weights across the three colour channels.
+in\_channels=1)}~\cite{ronneberger2015unet,he2016resnet}, with
+ImageNet-pretrained encoder weights.
 
 Training configuration: Dice loss (smooth\,=\,1) + BCE with
-\texttt{pos\_weight=20}; AdamW, $\mathrm{lr}=5\times10^{-4}$,
-weight decay $10^{-2}$; batch~4; 35 epochs (best at epoch~33);
-3-epoch linear warm-up then cosine decay to $10^{-6}$; fp16 mixed
-precision with GradScaler; gradient clip 1.0. Augmentation: random
-horizontal/vertical flip and 90-degree rotation applied jointly to
-image and mask.
+\texttt{pos\_weight=20}; AdamW, $\mathrm{lr}=5\times10^{-4}$;
+batch~4; 35 epochs (best at epoch~33); 3-epoch linear warm-up
+then cosine decay; fp16 mixed precision with GradScaler; gradient
+clip 1.0. Augmentation: random horizontal/vertical flip and
+90-degree rotation applied jointly to image and mask.
 
-The \texttt{pos\_weight=20} was chosen to compensate for the severe
-foreground/background imbalance: filament pixels represent roughly
-1--5\% of each image. The Dice term stabilises training when
-positive pixels are sparse; the weighted BCE term provides
-pixel-level gradient signal.
+The combined Dice + weighted BCE loss addresses the
+foreground/background imbalance inherent in filament images: the
+Dice term stabilises training when positive pixels are sparse,
+while \texttt{pos\_weight=20} on the BCE term amplifies the
+gradient signal from filament pixels. The checkpoint with the
+highest validation Dice across all 35 epochs was selected;
+Figure~\ref{fig:training} shows the per-epoch validation Dice.
+
+\begin{figure}[h]
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+  width=\columnwidth, height=3.8cm,
+  xlabel={Epoch}, ylabel={Val.\ Dice},
+  xmin=0, xmax=34, ymin=0.25, ymax=0.65,
+  xtick={0,5,10,15,20,25,30,34},
+  ytick={0.3,0.4,0.5,0.6},
+  grid=major, grid style={dotted},
+  tick label style={font=\small},
+  label style={font=\small},
+  mark size=1pt
+]
+\addplot[blue, thick, mark=*] coordinates {
+  (0,0.2813)(1,0.4966)(2,0.5111)(3,0.5623)(4,0.5623)
+  (5,0.5537)(6,0.5733)(7,0.5452)(8,0.5781)(9,0.5797)
+  (10,0.5764)(11,0.5951)(12,0.6097)(13,0.6034)(14,0.5805)
+  (15,0.5967)(16,0.5954)(17,0.5903)(18,0.5971)(19,0.5961)
+  (20,0.5962)(21,0.6010)(22,0.5984)(23,0.6175)(24,0.5909)
+  (25,0.6137)(26,0.6145)(27,0.6041)(28,0.6055)(29,0.6045)
+  (30,0.6113)(31,0.6242)(32,0.6069)(33,0.6275)(34,0.6049)
+};
+\addplot[red, dashed, thick] coordinates {(33,0.25)(33,0.65)};
+\end{axis}
+\end{tikzpicture}
+\caption{Validation Dice per epoch. Best checkpoint at epoch~33
+(Dice\,=\,0.6275, red dashed line).}
+\label{fig:training}
+\end{figure}
 
 Validation Dice is computed at threshold 0.5 on random 512-pixel
 crops from the resized validation images. It is a crop-level
