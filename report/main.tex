@@ -5,6 +5,7 @@
 % Add the entries from main_bib_additions.bib to main.bib.
 % ============================================================
 
+\documentclass[sigconf]{acmart}
 \input{preamble}
 
 % TikZ for pipeline diagram
@@ -12,6 +13,8 @@
 \usetikzlibrary{arrows.meta,fit,positioning}
 
 \guideStylefalse   % <-- disables grey guide text
+
+\begin{document}
 
 % ---- Author block ----
 \author{Mauro Frank Lima de Lima}
@@ -28,18 +31,8 @@
 
 % ---- Abstract: first sentence is FIXED (black text in template) ----
 \begin{abstract}
-This report describes our solution to the Solar Filament Segmentation
-Challenge 2026, a Kaggle competition based on the MAGFiLO
-dataset~\cite{ahmadzadeh2024dataset}.
-%
-We train a U-Net with a ResNet34 encoder on 1024$\times$1024
-H-alpha images using 512$\times$512 random crops, Dice loss, and
-weighted binary cross-entropy (positive class weight~20). Inference
-applies a single forward pass per image followed by component-wise
-probability filtering. The v13 checkpoint achieved a crop-level
-validation Dice of 0.6275 and a public leaderboard score of 0.28.
-The submitted CSV contains 1,790 instances from 178 of 180 test
-images.
+This report describes our solution to the Solar Filament Segmentation Challenge~2026, a Kaggle competition on automatic segmentation of solar filaments in GONG H-$\alpha$ observations.
+We train a U-Net with a ResNet34 encoder on MAGFiLO images resized to 1024$\times$1024 pixels, using random 512$\times$512 crops, Dice loss, and weighted binary cross-entropy (positive class weight~20). Inference applies a single forward pass per image followed by component-wise probability filtering. The v13 checkpoint achieved a crop-level validation Dice of 0.6275 and a public leaderboard score of 0.28. The submitted CSV contains 1,790 instances from 178 of 180 test images.
 \end{abstract}
 
 \keywords{solar filaments, H-alpha, U-Net, panoptic quality, MAGFiLO}
@@ -50,28 +43,9 @@ images.
 \section{Introduction}
 % ============================================================
 
-Solar filaments are cool, dense plasma structures suspended in the
-solar corona by magnetic fields. They appear as dark, elongated
-features in H-alpha observations and are relevant to space-weather
-studies~\cite{filament-segmentation-2026}. The MAGFiLO
-dataset~\cite{ahmadzadeh2024dataset} provides manually annotated
-GONG H-alpha images for training and evaluation.%
-\footnote{This work was carried out as part of the ESAIR workshop
-series on solar image analysis.}
+This report goes over the details of our submitted solution to the Solar Filament Segmentation Challenge~2026 \cite{filament-segmentation-2026}. The challenge, launched on July~10,~2026, is organized by the Earth-Space AI Research (ESAIR) Lab\footnote{\href{https://www.esairlab.com/home}{www.esairlab.com/}}. This challenge utilizes the MAGFiLO dataset for evaluation of the segmentation algorithms \cite{ahmadzadeh2024dataset}.
 
-Automatic segmentation is challenging because filaments exhibit thin,
-branching morphology, variable contrast, and overlap with other
-chromospheric structures. Instance-level evaluation uses Panoptic
-Quality (PQ), which combines recognition and segmentation
-quality~\cite{kirillov2019panoptic}.
-
-We present a pipeline based on U-Net with a ResNet34 encoder. The
-v13 submission scored 0.28 on the public leaderboard. No v13
-validation PQ was measured; the crop-level Dice reported here is a
-separate diagnostic. The v13 experiment changed input resolution,
-training crops, loss weighting, and inference resolution relative to
-v12; since these changes were not tested in controlled ablations,
-their individual contributions are unknown.
+Our approach converts a foreground probability map into individual instances using thresholding, morphological closing, and connected components. The primary competition metric is Panoptic Quality (PQ)~\cite{kirillov2019panoptic}. No v13 validation PQ was measured; the crop-level Dice reported here is a separate diagnostic. The v13 experiment changed input resolution, training crops, loss weighting, and inference resolution relative to v12; since these changes were not tested in controlled ablations, their individual contributions are unknown.
 
 % ============================================================
 \section{Methodology}
@@ -167,7 +141,7 @@ TTA                      & No \\
 Training resolution      & $1024\times1024$ (crop $512^2$) \\
 Output resolution        & $2048\times2048$ \\
 Val.\ crop Dice (ep.\ 33) & 0.6275 \\
-Public leaderboard PQ    & 0.28 \\
+Public leaderboard score & 0.28 \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -180,16 +154,17 @@ contribution of each change is unknown.
 
 \subsection{Qualitative Predictions}
 
-Figure~\ref{fig:qualitative} shows two test images with different
+Figure~\ref{fig:qualitative} shows three test images with different
 instance counts. Colors distinguish RLE instances; no ground-truth
 comparison is available for test images.
 
 \begin{figure}[h]
 \centering
 \includegraphics[width=\columnwidth]{v13_qualitative.png}
-\caption{v13 predictions on two test images (10 and 23 retained
-instances). Left: H-alpha input. Middle: predicted instances.
-Right: overlay. Test ground truth was not available.}
+\caption{v13 predictions on test images 20151204133714Th (1 retained
+instance), 20130206063154Uh (10), and 20140519195834Ch (23). Each
+row shows the H-alpha input, predicted instances, and overlay.
+Colors distinguish instances. Test ground truth was not available.}
 \label{fig:qualitative}
 \end{figure}
 
@@ -228,12 +203,14 @@ inference runs on CPU or GPU.
 % ============================================================
 % ACKNOWLEDGMENT — DO NOT CHANGE (official template text)
 % ============================================================
-\begin{acks}
-The authors would like to thank the National Science Foundation
-for their support of this work through grants
-AGS-2149748, AGS-2228996, AGS-2149649, and AGS-2228303.
-\end{acks}
+\section{Acknowledgment}\label{sec:acknowledgment}
+The organization of the Filament Segmentation Challenge 2026 is partially supported by the U.S. National Science Foundation (NSF) under Grant No. 2209912 and 2433781, directorate for Computer and Information Science and Engineering (CSE), and Office of Advanced Cyberinfrastructure (OAC), and Grant No. 2511630, AST Division Of Astronomical Sciences and MPS Directorate for Mathematical and Physical Sciences.
 
+The Filament Segmentation Challenge 2026 is sponsored by the U.S. National Science Foundation (NSF) National Solar Observatory (NSO).
+
+This work utilizes GONG data obtained by the NSO Integrated Synoptic Program, managed by the National Solar Observatory, which is operated by the Association of Universities for Research in Astronomy (AURA), Inc. under a cooperative agreement with the National Science Foundation and with contribution from the National Oceanic and Atmospheric Administration. The GONG network of instruments is hosted by the Big Bear Solar Observatory, High Altitude Observatory, Learmonth Solar Observatory, Udaipur Solar Observatory, Instituto de Astrofísica de Canarias, and Cerro Tololo Interamerican Observatory.
+
+\bibliographystyle{ACM-Reference-Format}
 \bibliography{main}
 
 \end{document}
