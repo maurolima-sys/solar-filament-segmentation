@@ -62,9 +62,21 @@ jupyter notebook pipeline.ipynb
 ```
 
 Attach the MAGFiLO dataset and set `filament.CFG` data paths if they are not
-discovered automatically. The notebook loads `weights/best.pt`, uses the fixed
-v13 configuration above, does not retrain or retune thresholds, and writes
-`submission_v13.csv`. Inference runs on CPU or GPU; a GPU is recommended.
+discovered automatically. On Kaggle, attach the `filament-segmentation-2026`
+competition dataset; the code searches for the `MAGFiLO_1.0_Kaggle_2026`
+directory and expects test images under `test/test_images`. If the dataset is
+mounted elsewhere, set the test-image directory before running prediction:
+
+```python
+F.CFG["test_dir"] = r"/path/to/MAGFiLO_1.0_Kaggle_2026/test/test_images"
+```
+
+The notebook loads `weights/best.pt`, uses the fixed v13 configuration above,
+and does not retrain or retune thresholds. Its prediction cell writes directly
+to `submission_v13.csv`, overwriting that file. Do not run it if you need to
+preserve the scored CSV; when reproducing inference, change the output filename
+to a separate file and verify it before committing. Inference runs on CPU or
+GPU; a GPU is recommended.
 
 The `filament.py` training function is the earlier 512-pixel training pipeline;
 it does not reproduce the v13 crop-based training run. The included checkpoint
