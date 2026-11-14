@@ -1,17 +1,17 @@
-\documentclass[11pt]{article}
+\documentclass[10pt]{article}
 
-\usepackage[margin=1in]{geometry}
+\usepackage[margin=0.7in]{geometry}
 \usepackage{amsmath,amssymb}
 \usepackage{graphicx}
 \usepackage{booktabs}
 \usepackage[hidelinks]{hyperref}
 
 \setlength{\parindent}{0pt}
-\setlength{\parskip}{0.6\baselineskip}
+\setlength{\parskip}{0.3\baselineskip}
 
 \title{
-U-Net with ResNet34 Encoder for Solar Filament Segmentation:
-Training at 1024\,px with Component-wise Instance Filtering
+Solar Filament Segmentation with U-Net and ResNet34:
+The v13 Training and Inference Pipeline
 }
 
 \author{
@@ -34,58 +34,47 @@ other structures and noise in the solar atmosphere.
 
 This work presents a pixel-level segmentation pipeline based on
 U-Net with a ResNet34 encoder, trained using MAGFiLO H-alpha images.
-The inference pipeline combines eight-view test-time augmentation
-(TTA), probability-map averaging, and component-wise filtering to
-generate individual filament predictions.
+The v13 model is trained on 1024$\times$1024 resized images using
+512$\times$512 random crops, Dice loss, and weighted binary
+cross-entropy.
 
 The input images are normalized using the 1st and 99th percentiles,
 converted to grayscale, and resized from 2048$\times$2048 to
-512$\times$512 pixels. During inference, predictions are restored
-to the original image resolution and processed using probability
-thresholds and morphological closing.
+1024$\times$1024 pixels. Inference uses a single view without
+test-time augmentation. Probability maps are restored to the
+original resolution and separated into connected components using
+fixed confidence and area thresholds.
 
-The submitted inference pipeline (v13) generated 1790 predicted
-instances across 178 test images. The model achieved a validation
-Dice of 0.627 and a public leaderboard score of 0.28.
+The v13 checkpoint achieved a validation Dice of 0.6275 on
+512$\times$512 validation crops and a public leaderboard score of
+0.28. Its CSV contains 1,790 instances from 178 of 180 test images;
+two images had no retained instances.
 \end{abstract}
 
 
 \section{Introduction}
 
-Solar filaments are relatively cool and dense plasma structures
-suspended in the solar corona by magnetic fields. They are commonly
-observed as dark elongated features against the brighter solar
-chromosphere in H-alpha images.
+Solar filaments are cool, dense plasma structures seen as dark,
+elongated features in H-alpha observations. Their thin, branching
+morphology, variable contrast, and overlap with other chromospheric
+structures make pixel-level segmentation difficult.
 
-Their morphology and evolution are relevant to the study of solar
-activity and space weather. Reliable identification of these
-structures can support the analysis of their spatial distribution,
-morphological properties, and evolution.
+This study uses a U-Net with a ResNet34 encoder to produce a
+foreground probability map and converts that map into individual
+instances using thresholding, morphological closing, and
+connected components. The v13 submission scored 0.28 on the public
+leaderboard. No v13 validation PQ was measured; the crop-level
+validation Dice reported here is a separate diagnostic.
+The competition's primary metric is Panoptic Quality, which combines
+recognition and segmentation quality~\cite{pq}.
 
-Automatic filament segmentation is challenging because filaments
-may exhibit thin structures, irregular boundaries, branches,
-and complex shapes. Their appearance can also be affected by
-image noise, variations in contrast, sunspots, and other
-chromospheric structures.
-
-These characteristics make pixel-level segmentation more
-appropriate than image-level classification. In addition,
-distinguishing individual filament instances requires separating
-connected structures rather than producing only a single
-foreground mask.
-
-This work investigates a segmentation pipeline based on U-Net
-with a ResNet34 encoder. Test-time augmentation and component-wise
-probability filtering are incorporated into the inference stage
-to generate individual filament predictions.
-
-Panoptic Quality (PQ) is a metric commonly used for evaluating
-instance-level segmentation. It combines segmentation quality
-and recognition quality. However, PQ values are not reported
-in this work because the corresponding validation evaluation
-was not completed in the recorded experimental run.
+The v13 experiment changed several settings relative to v12,
+including input resolution, training crops, loss weighting, and
+inference resolution. Since these changes were not tested in
+controlled ablations, their individual contributions are unknown.
 
 
+\newpage
 \section{Data and Preprocessing}
 
 The experiments use H-alpha solar images from the MAGFiLO dataset
@@ -95,19 +84,22 @@ The original images have a resolution of 2048$\times$2048 pixels.
 The preprocessing pipeline consists of the following operations:
 
 \begin{enumerate}
+    \setlength{\itemsep}{0.1em}
+    \setlength{\topsep}{0.2em}
     \item Convert the input image to grayscale.
     \item Normalize image intensities using the 1st and 99th
           percentiles.
     \item Resize the image from 2048$\times$2048 to
-          512$\times$512 pixels.
+          1024$\times$1024 pixels.
     \item Rasterize the expert annotations from COCO polygon
           representations into binary segmentation masks.
 \end{enumerate}
 
 The dataset is divided into training and validation subsets
-using an 80/20 split by image file. This strategy is intended
-to prevent images associated with the same file from being
-distributed across both subsets.
+using an 80/20 split by image file, with seed~0. The v13 run
+contained 918 training items and 236 validation items. Assigning
+all annotations for a file to the same subset prevents that file
+from appearing in both training and validation.
 
 Annotations belonging to category~4 (Ambiguous) are excluded
 from training. The remaining three categories (Left-bearing,
@@ -117,9 +109,11 @@ foreground class.
 
 \section{Model and Training}
 
-The segmentation architecture is a U-Net with a ResNet34
+The segmentation architecture is a U-Net~\cite{unet} with a ResNet34
 encoder, implemented using the
-\texttt{segmentation\_models\_pytorch} library.
+\texttt{segmentation\_\allowbreak{}models\_\allowbreak{}pytorch}
+library. The encoder uses
+residual connections~\cite{resnet}.
 
 The network receives single-channel grayscale images and
 produces pixel-level segmentation predictions.
@@ -127,16 +121,19 @@ produces pixel-level segmentation predictions.
 The training configuration is as follows:
 
 \begin{itemize}
+    \setlength{\itemsep}{0.1em}
+    \setlength{\topsep}{0.2em}
     \item Architecture: U-Net with ResNet34 encoder.
     \item Encoder weights initialised from ImageNet pre-training.
     \item Input channels: 1 (grayscale).
-    \item Input resolution: 1024$\times$1024 pixels (random
-          512$\times$512 crops during training).
+    \item 1024$\times$1024 images; random 512$\times$512 training crops.
     \item Loss function: Dice loss (smooth\,=\,1) combined with
-          binary cross-entropy, positive class weight 20.
+          binary cross-entropy with positive class weight 20.
     \item Optimizer: AdamW, learning rate $5\times10^{-4}$.
     \item Batch size: 4.
     \item Training duration: 35 epochs (best at epoch~33).
+    \item Learning-rate schedule: three warm-up epochs followed
+          by cosine decay.
     \item Mixed-precision training (fp16 autocast + GradScaler).
     \item Gradient clipping (max norm 1.0).
 \end{itemize}
@@ -145,58 +142,47 @@ On-the-fly data augmentation includes random horizontal flip,
 vertical flip, and 90-degree rotation (uniform over
 $\{0^\circ, 90^\circ, 180^\circ, 270^\circ\}$).
 
+The reported validation Dice uses a 0.5 probability threshold
+and is averaged over 512$\times$512 crops from resized validation
+images. The validation dataset also samples a random crop per
+item, so this value is a crop-level diagnostic rather than a
+full-image semantic score or an instance-level metric.
+
 The model checkpoint used by the inference pipeline is
-\texttt{weights/best.pt} (float32, 98\,MB), available in the
-public repository (v13 weights).
+\texttt{weights/best.pt} (float32, 97.9\,MB).
 
 
+\newpage
 \section{Inference and Post-processing}
 
-\paragraph{Test-time augmentation.}
-The inference pipeline applies eight-view TTA, consisting of
-four rotations ($0^\circ$, $90^\circ$, $180^\circ$, $270^\circ$)
-combined with horizontal flip on/off. The model predicts a
-probability map for each transformed input. The corresponding
-inverse transformations are applied so that all predictions
-return to the original spatial orientation. The eight probability
-maps are averaged pixel-wise to obtain the final probability map.
+\paragraph{Single-view inference.}
+Each grayscale test image is resized to 1024$\times$1024 and
+processed once by the model. The v13 submission does not use
+test-time augmentation; no spatial transforms or probability-map
+averaging are applied at inference.
 
 \paragraph{Upsampling.}
-The averaged 512$\times$512 probability map is upsampled to
+The 1024$\times$1024 probability map is upsampled to
 2048$\times$2048 with bilinear interpolation.
 
 \paragraph{Component-wise filtering.}
 A seed mask is obtained by thresholding at $t_{\mathrm{lo}}$,
-followed by morphological closing with an elliptical kernel
-(radius 5\,px). Connected components are labelled; a component
-is retained as a filament instance only if all three conditions
-hold:
-\begin{itemize}
-    \item $\max(\mathrm{prob}) > t_{\mathrm{hi}}$ (peak confidence),
-    \item $\mathrm{mean}(\mathrm{prob}) \geq \mathrm{min\_meanp}$
-          (average confidence),
-    \item $\mathrm{area} \geq \mathrm{min\_area}$ (minimum size).
-\end{itemize}
-This strategy is inspired by~\cite{bahrami2026}, without the
-gradient-boosting post-filter described there.
-
-\paragraph{Threshold configuration.}
-The thresholds used in the submitted inference are:
-$t_{\mathrm{lo}} = 0.35$,
-$t_{\mathrm{hi}} = 0.50$,
-$\mathrm{min\_meanp} = 0.30$,
-$\mathrm{min\_area} = 50$\,pixels.
-
-Each retained component is encoded separately using
-run-length encoding (RLE), producing one instance per
-predicted filament.
+then closed with a 5$\times$5 elliptical kernel. A component is
+kept when its peak probability exceeds 0.50, its mean probability
+is at least 0.30, and its area is at least 50 pixels. Seed
+threshold $t_{\mathrm{lo}}$ is 0.35. Each retained component is
+encoded as a separate COCO run-length encoding (RLE) instance.
+Component-wise confidence filtering is related to prior solar
+filament post-processing work~\cite{bahrami2026}.
 
 
 \section{Results}
 
-The v13 inference pipeline generated 1790 predicted instances
-across 178 test images. The predictions were encoded using COCO
-binary RLE and stored in \texttt{submission\_v13.csv}.
+The inference process examined all 180 test images and generated
+1,790 predicted instances from 178 images. The two remaining
+images had no components passing the post-processing filters and
+therefore have no rows in the CSV. Predictions were encoded using
+COCO binary RLE and stored in \texttt{submission\_v13.csv}.
 
 \begin{table}[ht]
 \centering
@@ -205,38 +191,44 @@ binary RLE and stored in \texttt{submission\_v13.csv}.
 \toprule
 Quantity & Result \\
 \midrule
-Test images processed       & 178 \\
+Test images processed       & 180 \\
+Images with predictions     & 178 \\
 Predicted instances         & 1790 \\
-TTA views                   & 8   \\
+TTA                         & No \\
 Training input resolution   & $1024\times1024$ (crop $512\times512$) \\
 Output resolution           & $2048\times2048$ \\
-Validation Dice (semantic)  & 0.627 \\
+Validation crop Dice        & 0.6275 \\
 Public leaderboard score    & 0.28 \\
 Training epochs             & 35 (best at epoch 33) \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-\begin{table}[ht]
-\centering
-\caption{Comparison of submitted versions.}
-\begin{tabular}{lccc}
-\toprule
-Version & Epochs & Val Dice & Public LB \\
-\midrule
-v12 (15\,ep, 512\,px) & 15 & --- & 0.00 \\
-v13 (35\,ep, 1024\,px) & 35 & 0.627 & 0.28 \\
-\bottomrule
-\end{tabular}
-\end{table}
+The earlier v12 submission scored 0.00. The v13 result is higher,
+but the changed settings were not isolated in controlled ablations;
+no single change can be credited with the improvement.
 
-The v12 submission scored 0.00 on the public leaderboard. Post-hoc
-diagnosis identified that the default thresholds in the inference
-script ($t_{\mathrm{hi}}=0.99$, $\mathrm{min\_meanp}=0.85$) were
-too restrictive, suppressing all predictions. The v13 retraining
-also increased the input resolution from 512 to 1024\,px and
-extended training to 35 epochs, yielding a validation Dice of 0.627
-and a public score of 0.28.
+\newpage
+\section{Discussion and Limitations}
+
+The public score confirms that the v13 CSV was evaluated, but does
+not establish that predictions are complete or optimal. Two test
+images have no predicted instances. The reproduction pipeline
+preserves this behavior instead of adding unvalidated fallback
+masks.
+
+The validation Dice of 0.6275 is calculated over random crops and
+does not directly measure the final full-image instance quality.
+No v13 local PQ evaluation, threshold ablation, or TTA ablation
+was completed. An earlier CPU sweep reported PQ 0.0000 and Dice
+0.1144 using the older \texttt{best.pt} checkpoint; those results
+do not evaluate v13 and are not compared with its public score.
+
+The validation Dice is a crop-level diagnostic, not full-image PQ.
+No v13 validation PQ or controlled threshold/TTA ablation was
+completed. An earlier CPU sweep (PQ 0.0000, Dice 0.1144) used the
+older checkpoint and does not evaluate v13. Future work should test
+coverage recovery and threshold tuning on the v13 weights.
 
 
 \section{Reproducibility}
@@ -252,7 +244,10 @@ available at:
 To reproduce: install dependencies with
 \texttt{pip install -r requirements.txt} and run
 \texttt{pipeline.ipynb}, which loads \texttt{weights/best.pt}
-without retraining. GPU used for training: NVIDIA T4 (Kaggle).
+without retraining or threshold retuning. It writes
+\texttt{submission\_v13.csv}, reports missing image predictions,
+and validates the RLE output. The exact CSV is included in the
+repository. Training ran on a Kaggle GPU (CUDA).
 
 
 \begin{thebibliography}{9}
@@ -270,8 +265,20 @@ A.~Kirillov et al.,
 \textit{Proc.\ IEEE/CVF CVPR}, 2019.
 \url{https://doi.org/10.1109/CVPR.2019.00963}
 
+\bibitem{unet}
+O.~Ronneberger, P.~Fischer, and T.~Brox,
+``U-Net: Convolutional Networks for Biomedical Image Segmentation,''
+\textit{MICCAI}, 2015.
+\url{https://doi.org/10.1007/978-3-319-24574-4_28}
+
+\bibitem{resnet}
+K.~He et al.,
+``Deep Residual Learning for Image Recognition,''
+\textit{Proc.\ IEEE/CVF CVPR}, 2016.
+\url{https://doi.org/10.1109/CVPR.2016.90}
+
 \bibitem{bahrami2026}
-D.~Bahrami,
+D.~Afshar,
 ``Solar Filament U-Net: OOF 0.45 vs Public 0.39,''
 Kaggle notebook, 2026.
 \url{https://www.kaggle.com/code/dariushafshar/solar-filament-u-net-oof-0-45-vs-public-0-39}
