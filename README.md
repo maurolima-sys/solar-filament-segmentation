@@ -6,8 +6,13 @@ Kaggle competition: [filament-segmentation-2026](https://www.kaggle.com/competit
 ## Current status (2026-11-14)
 
 The v13 submission (`submission_v13.csv`) received a **public score of 0.28**.
-It contains 1,790 predicted instances from all 180 test images. The previous
-v12 submission scored 0.00.
+It contains 1,790 predicted instances from 178 of the 180 test images; the
+other two have no predicted instances in the CSV. The previous v12 submission
+scored 0.00.
+The SHA-256 of the matching `weights/best.pt` checkpoint is
+`85f9103a6423875996a3f0200495ea862ed8e945b88305676728b3e127c709f5`.
+The SHA-256 of `submission_v13.csv` is
+`b87bddccc8121123948ffcae40e1d0a00a809f0f1bf196a2113f9be2faac68a8`.
 
 The v13 checkpoint reached validation Dice 0.6275 at epoch 33. This Dice was
 computed at a 0.5 probability threshold on randomly sampled 512×512 crops from
@@ -29,7 +34,8 @@ Kaggle evaluator.
 2. **Model and training**: one-channel U-Net with a ResNet34 encoder. The v13
    run used Dice loss plus binary cross-entropy with `pos_weight=20`, AdamW
    (`lr=5e-4`), 35 epochs, and 512×512 random crops from the resized images.
-   The checkpoint was selected by validation Dice.
+   The learning rate used a three-epoch warmup followed by cosine decay. The
+   checkpoint was selected by validation Dice.
 3. **Inference**: process the full 1024×1024 resized image without test-time
    augmentation (TTA), then upsample the probability map to 2048×2048.
 4. **Post-processing**: threshold seeds at `t_lo=0.35`, apply a 5×5
@@ -66,10 +72,14 @@ and inference notebook reproduce the v13 predictions without retraining.
 
 ## Files
 
-- `filament.py` — dataset, training, TTA, post-processing, RLE, prediction
+- `filament.py` — shared dataset/model code, earlier 512-pixel training, TTA,
+  post-processing, RLE, and prediction
 - `pipeline.ipynb` — v13 inference and submission validation notebook
+- `report/report.tex` — technical report source
+- `report/report.pdf` — compiled four-page technical report
 - `requirements.txt` — Python dependencies
-- `weights/best.pt` — trained weights (float32); if > 100 MB use Git LFS or link to Kaggle dataset
+- `weights/best.pt` — exact v13 checkpoint (SHA-256 listed above)
+- `submission_v13.csv` — frozen CSV that received the public score of 0.28
 - `reference/` — third-party notebooks kept for reference, **not submitted**
 
 ## External benchmarks

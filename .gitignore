@@ -6,6 +6,7 @@ weights/*.pt.bak
 submission.csv
 CONTEXT.md
 .env
+/API Token is now available auxiliar.txt
 report/*.pdf
 report/*.aux
 report/*.log
@@ -20,3 +21,7 @@ MAGFiLO_1.0_Annotations_kaggle2026_train.json
 download*.txt
 notebook602b31390f.ipynb
 Screenshot*.png
+.work/
+.kilo/
+.vscode/
+kaggle_poll.py

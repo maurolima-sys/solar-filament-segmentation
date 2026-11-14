@@ -258,15 +258,20 @@ def collect_val_probs(model, val_items):
 def rle(mask):
     return mu.encode(np.asfortranarray(mask.astype(np.uint8)))["counts"].decode("ascii")
 
-def predict(out_csv="submission.csv"):
+def predict(out_csv="submission.csv", tta=True):
+    """Write connected-component RLE predictions, with optional test-time augmentation."""
     model = build(pretrained=False).to(dev)
     model.load_state_dict(torch.load(CFG["ckpt"], map_location=dev))
     model.eval()
     paths = sorted(glob.glob(CFG["test_dir"] + "/*"))
     rows, O = [], CFG["out_size"]
     for p in paths:
-        x = TestDS([p])[0][None].to(dev)                  # (1,1,512,512)
-        pr = tta_predict(model, x)                        # (512,512)
+        x = TestDS([p])[0][None].to(dev)                  # (1,1,size,size)
+        if tta:
+            pr = tta_predict(model, x)
+        else:
+            with torch.no_grad():
+                pr = torch.sigmoid(model(x))[0, 0].cpu().numpy()
         pr = cv2.resize(pr, (O, O), interpolation=cv2.INTER_LINEAR)
         for j, inst in enumerate(postprocess(pr), 1):
             rows.append((f"{stem(p)}_{j}", rle(inst)))

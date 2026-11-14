@@ -16,8 +16,7 @@ The v13 Training and Inference Pipeline
 
 \author{
 Mauro Frank Lima de Lima\\
-\small Independent Researcher, Manaus, Amazonas, Brazil\\
-\small \texttt{mauro.frank.lima@outlook.com}
+\small Independent Researcher, Market Harborough, United Kingdom\\
 }
 
 \date{}
@@ -173,7 +172,7 @@ is at least 0.30, and its area is at least 50 pixels. Seed
 threshold $t_{\mathrm{lo}}$ is 0.35. Each retained component is
 encoded as a separate COCO run-length encoding (RLE) instance.
 Component-wise confidence filtering is related to prior solar
-filament post-processing work~\cite{bahrami2026}.
+filament post-processing work~\cite{afshar2026}.
 
 
 \section{Results}
@@ -218,17 +217,11 @@ preserves this behavior instead of adding unvalidated fallback
 masks.
 
 The validation Dice of 0.6275 is calculated over random crops and
-does not directly measure the final full-image instance quality.
-No v13 local PQ evaluation, threshold ablation, or TTA ablation
-was completed. An earlier CPU sweep reported PQ 0.0000 and Dice
-0.1144 using the older \texttt{best.pt} checkpoint; those results
-do not evaluate v13 and are not compared with its public score.
-
-The validation Dice is a crop-level diagnostic, not full-image PQ.
-No v13 validation PQ or controlled threshold/TTA ablation was
-completed. An earlier CPU sweep (PQ 0.0000, Dice 0.1144) used the
-older checkpoint and does not evaluate v13. Future work should test
-coverage recovery and threshold tuning on the v13 weights.
+does not directly measure full-image instance quality. No v13
+validation PQ or controlled threshold/TTA ablation was completed.
+An earlier CPU sweep (PQ 0.0000, Dice 0.1144) used the older
+\texttt{best.pt} checkpoint and does not evaluate v13. Future work
+should test coverage recovery and threshold tuning on the v13 weights.
 
 
 \section{Reproducibility}
@@ -277,7 +270,7 @@ K.~He et al.,
 \textit{Proc.\ IEEE/CVF CVPR}, 2016.
 \url{https://doi.org/10.1109/CVPR.2016.90}
 
-\bibitem{bahrami2026}
+\bibitem{afshar2026}
 D.~Afshar,
 ``Solar Filament U-Net: OOF 0.45 vs Public 0.39,''
 Kaggle notebook, 2026.
