@@ -25,3 +25,5 @@ Screenshot*.png
 .kilo/
 .vscode/
 kaggle_poll.py
+filament-safety-submission-cpu-20261114.ipynb
+main_bib_additions*.bib
