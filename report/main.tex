@@ -2,7 +2,8 @@
 % PASTE THIS OVER THE ENTIRE CONTENT OF main.tex IN OVERLEAF
 % Keep preamble.tex and main.bib from the template as-is.
 % Upload v13_qualitative.png to the project root.
-% Add the entries from main_bib_additions.bib to main.bib.
+% Add only missing citation keys from main_bib_additions.bib to main.bib.
+% Check for duplicates first; afshar2026 is already present in the current project.
 % ============================================================
 
 \documentclass[sigconf]{acmart}
@@ -51,7 +52,7 @@ Our approach converts a foreground probability map into individual instances usi
 \begin{equation}
 \mathrm{PQ} = \frac{\sum_{(p,g)\in\mathrm{TP}} \mathrm{IoU}(p,g)}{|\mathrm{TP}| + \tfrac{1}{2}|\mathrm{FP}| + \tfrac{1}{2}|\mathrm{FN}|},
 \end{equation}
-where a predicted instance $p$ is matched to ground-truth instance $g$ when $\mathrm{IoU}(p,g)\geq0.5$. The exact evaluator is provided by the competition organisers. No v13 validation PQ was measured; the crop-level Dice reported here is a separate diagnostic. The v13 experiment changed input resolution, training crops, loss weighting, and inference resolution relative to v12; since these changes were not tested in controlled ablations, their individual contributions are unknown.
+where a predicted instance $p$ is matched to ground-truth instance $g$ when $\mathrm{IoU}(p,g)>0.5$. The exact evaluator is provided by the competition organisers. No v13 validation PQ was measured; the crop-level Dice reported here is a separate diagnostic. The v13 experiment changed input resolution, training crops, loss weighting, and inference resolution relative to v12; since these changes were not tested in controlled ablations, their individual contributions are unknown.
 
 % ============================================================
 \section{Methodology}
@@ -256,6 +257,10 @@ Quantity & Value \\
 Test images processed    & 180 \\
 Images with predictions  & 178 \\
 Predicted instances      & 1\,790 \\
+Instances/image, median (range) & 10 (1--23) \\
+RLE area, minimum & 50 px \\
+RLE area, median & 1\,014.5 px \\
+RLE area, maximum & 25\,043 px \\
 TTA                      & No \\
 Training resolution      & $1024\times1024$ (crop $512^2$) \\
 Output resolution        & $2048\times2048$ \\
@@ -264,6 +269,40 @@ Public leaderboard score & 0.28 \\
 \bottomrule
 \end{tabular}
 \end{table}
+
+Figure~\ref{fig:instance-counts} summarizes the number of retained
+instances per test image. The mask-area statistics in
+Table~\ref{tab:results} are computed from the foreground run lengths
+in the submitted RLEs. These describe the submission output only;
+without test annotations, they do not measure segmentation accuracy
+or completeness.
+
+\begin{figure}[h]
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+  width=\columnwidth, height=3.8cm,
+  ybar, bar width=4pt,
+  xlabel={Instances per test image},
+  ylabel={Number of images},
+  xmin=-0.5, xmax=23.5, ymin=0, ymax=18,
+  xtick={0,5,10,15,20,23},
+  ytick={0,4,8,12,16},
+  grid=major, grid style={dotted},
+  tick label style={font=\small},
+  label style={font=\small},
+]
+\addplot[fill=blue!45, draw=blue] coordinates {
+  (0,2)(1,5)(2,5)(3,10)(4,8)(5,16)(6,13)(7,9)
+  (8,7)(9,11)(10,11)(11,9)(12,10)(13,11)(14,14)
+  (15,7)(16,10)(17,8)(18,8)(19,1)(20,2)(21,2)(22,0)(23,1)
+};
+\end{axis}
+\end{tikzpicture}
+\caption{Retained RLE instances per test image across all 180 images;
+zero denotes images with no rows in the submission CSV.}
+\label{fig:instance-counts}
+\end{figure}
 
 The earlier v12 submission scored 0.00, while v13 scored 0.28 on the
 public leaderboard. The v13 experiment changed several settings,
@@ -277,24 +316,23 @@ Figure~\ref{fig:qualitative} shows three test images with different
 instance counts. Colors distinguish RLE instances; no ground-truth
 comparison is available for test images.
 
-\begin{figure}[h]
+\begin{figure*}[t]
 \centering
-\includegraphics[width=\columnwidth]{v13_qualitative.png}
+\includegraphics[width=0.9\textwidth]{v13_qualitative.png}
 \caption{v13 predictions on test images 20151204133714Th (1 retained
 instance), 20130206063154Uh (10), and 20140519195834Ch (23). Each
 row shows the H-alpha input, predicted instances, and overlay.
 Colors distinguish instances. Test ground truth was not available.}
 \label{fig:qualitative}
-\end{figure}
+\end{figure*}
 
 \subsection{Strengths, Weaknesses, and Improvements}
 
 \textbf{Strengths.} The pipeline is simple and fully reproducible:
-fixed thresholds, no TTA, one checkpoint. The ResNet34 encoder was initialised with ImageNet weights and
-adapted to single-channel input.
-The component-wise filtering (peak, mean, area) is intended to reduce
-false positives from low-confidence blobs without requiring a separate
-classifier.
+fixed thresholds, no TTA, one checkpoint. The ResNet34 encoder was
+initialized with ImageNet weights. Component-wise filtering (peak,
+mean, area) is intended to reduce false positives from low-confidence
+blobs without requiring a separate classifier.
 
 \textbf{Weaknesses.} No v13 validation PQ was measured; the
 crop-level Dice is a proxy metric that does not directly optimise
