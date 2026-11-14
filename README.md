@@ -3,26 +3,44 @@
 U-Net (ResNet34 encoder, 1-channel input) trained on MAGFiLO H-alpha images.
 Kaggle competition: [filament-segmentation-2026](https://www.kaggle.com/competitions/filament-segmentation-2026).
 
-## Pipeline (v2)
+## Current status (2026-11-14)
 
-1. **Preprocess**: percentile (1–99) normalisation, resize 2048 → 512 (grayscale).
-   Masks rasterised from COCO polygons; 80/20 train/val split by image file (no annotator leakage).
-   Category 4 (Ambiguous) excluded from training.
-2. **Model**: `segmentation_models_pytorch.Unet(resnet34, encoder_weights="imagenet")`, Dice + BCE loss, AdamW, fp16 training on GPU.
-3. **TTA**: 8 views (4 rotations × 2 flips), probabilities averaged before thresholding.
-4. **Post-process**: upsample to 2048×2048; seed mask at `t_lo` + morphological closing;
-   keep component only if `peak_prob > t_hi`, `mean_prob ≥ min_meanp`, `area ≥ min_area`.
-   Thresholds tuned by grid search on the validation set after training.
-5. **Output**: one RLE per filament → `submission.csv`.
+The v13 submission (`submission_v13.csv`) received a **public score of 0.28**.
+It contains 1,790 predicted instances from all 180 test images. The previous
+v12 submission scored 0.00.
 
-### Comparison with baseline
+The v13 checkpoint reached validation Dice 0.6275 at epoch 33. This Dice was
+computed at a 0.5 probability threshold on randomly sampled 512×512 crops from
+1024×1024 resized validation images; it is not a full-image PQ measurement.
+The competition score is the authoritative public result.
 
-| | Baseline (v1) | This repo (v2) |
-|---|---|---|
-| Resolution | 512 | 512 |
-| TTA | none | 8 views |
-| Post-processing | single threshold + min_area | per-component peak/mean/area filter + grid search |
-| Exclude ambiguous | no | yes (cat 4) |
+An earlier CPU sweep reported local PQ 0.0000 and semantic Dice 0.1144. That
+sweep loaded the older `best.pt` checkpoint from Kaggle input, not v13's
+`best_v13.pt`, so it does not evaluate the v13 model and is not comparable.
+Its PQ is also a local connected-component approximation, not the official
+Kaggle evaluator.
+
+## Pipeline (v13)
+
+1. **Preprocess**: convert to grayscale, normalize between the 1st and 99th
+   percentiles, and resize 2048×2048 images to 1024×1024. Training masks are
+   rasterised from COCO polygons; the 80/20 split is by image file. Category 4
+   (Ambiguous) is excluded.
+2. **Model and training**: one-channel U-Net with a ResNet34 encoder. The v13
+   run used Dice loss plus binary cross-entropy with `pos_weight=20`, AdamW
+   (`lr=5e-4`), 35 epochs, and 512×512 random crops from the resized images.
+   The checkpoint was selected by validation Dice.
+3. **Inference**: process the full 1024×1024 resized image without test-time
+   augmentation (TTA), then upsample the probability map to 2048×2048.
+4. **Post-processing**: threshold seeds at `t_lo=0.35`, apply a 5×5
+   morphological closing, and retain connected components meeting
+   `t_hi=0.50`, `min_meanp=0.30`, and `min_area=50`.
+5. **Output**: encode each retained component as one RLE row in
+   `submission_v13.csv`.
+
+The earlier v12 pipeline used 512×512 inputs and 8-view TTA. The v13 inference
+settings above match the checkpoint and submission that received the public
+score of 0.28.
 
 The per-component filtering strategy (t_lo / t_hi / min_meanp) was inspired by
 Dariush Afshar's public notebook *"Solar Filament U-Net OOF 0.45 vs Public 0.39"*
@@ -30,35 +48,26 @@ Dariush Afshar's public notebook *"Solar Filament U-Net OOF 0.45 vs Public 0.39"
 The notebook is kept locally in `reference/` for consultation only and is **not**
 part of this submission.
 
-## Reproduce (inference only)
+## Reproduce v13 (inference only)
 
 ```bash
 pip install -r requirements.txt
-jupyter notebook pipeline.ipynb   # loads weights/best.pt, writes submission.csv
+jupyter notebook pipeline.ipynb
 ```
 
-Set `CFG["test_dir"]` to the folder with the test JPEGs. Runs on CPU or GPU.
+Attach the MAGFiLO dataset and set `filament.CFG` data paths if they are not
+discovered automatically. The notebook loads `weights/best.pt`, uses the fixed
+v13 configuration above, does not retrain or retune thresholds, and writes
+`submission_v13.csv`. Inference runs on CPU or GPU; a GPU is recommended.
 
-## Retrain
-
-```bash
-python filament.py   # set CFG paths first; runs train → grid search → predict
-```
-
-Or on Kaggle (clones this repo and runs the full pipeline):
-
-```python
-!pip install -q segmentation-models-pytorch pycocotools
-!git clone --depth 1 https://github.com/maurolima-sys/solar-filament-segmentation.git /kaggle/working/repo
-import sys; sys.path.insert(0, '/kaggle/working/repo')
-import filament as F
-F.train()
-```
+The `filament.py` training function is the earlier 512-pixel training pipeline;
+it does not reproduce the v13 crop-based training run. The included checkpoint
+and inference notebook reproduce the v13 predictions without retraining.
 
 ## Files
 
 - `filament.py` — dataset, training, TTA, post-processing, RLE, prediction
-- `pipeline.ipynb` — end-to-end inference notebook
+- `pipeline.ipynb` — v13 inference and submission validation notebook
 - `requirements.txt` — Python dependencies
 - `weights/best.pt` — trained weights (float32); if > 100 MB use Git LFS or link to Kaggle dataset
 - `reference/` — third-party notebooks kept for reference, **not submitted**

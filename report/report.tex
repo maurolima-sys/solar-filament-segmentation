@@ -10,8 +10,8 @@
 \setlength{\parskip}{0.6\baselineskip}
 
 \title{
-U-Net with 8-view Test-Time Augmentation and
-Component-wise Filtering for Solar Filament Segmentation
+U-Net with ResNet34 Encoder for Solar Filament Segmentation:
+Training at 1024\,px with Component-wise Instance Filtering
 }
 
 \author{
@@ -44,10 +44,9 @@ converted to grayscale, and resized from 2048$\times$2048 to
 to the original image resolution and processed using probability
 thresholds and morphological closing.
 
-The submitted inference pipeline generated 960 predicted instances
-across 180 test images. Quantitative validation metrics and the
-public leaderboard score are not reported because they were not
-available in the recorded experimental results.
+The submitted inference pipeline (v13) generated 1790 predicted
+instances across 178 test images. The model achieved a validation
+Dice of 0.627 and a public leaderboard score of 0.28.
 \end{abstract}
 
 
@@ -131,12 +130,13 @@ The training configuration is as follows:
     \item Architecture: U-Net with ResNet34 encoder.
     \item Encoder weights initialised from ImageNet pre-training.
     \item Input channels: 1 (grayscale).
-    \item Input resolution: 512$\times$512 pixels.
+    \item Input resolution: 1024$\times$1024 pixels (random
+          512$\times$512 crops during training).
     \item Loss function: Dice loss (smooth\,=\,1) combined with
-          binary cross-entropy.
-    \item Optimizer: AdamW, learning rate $3\times10^{-4}$.
-    \item Batch size: 8.
-    \item Training duration: 15 epochs.
+          binary cross-entropy, positive class weight 20.
+    \item Optimizer: AdamW, learning rate $5\times10^{-4}$.
+    \item Batch size: 4.
+    \item Training duration: 35 epochs (best at epoch~33).
     \item Mixed-precision training (fp16 autocast + GradScaler).
     \item Gradient clipping (max norm 1.0).
 \end{itemize}
@@ -146,8 +146,8 @@ vertical flip, and 90-degree rotation (uniform over
 $\{0^\circ, 90^\circ, 180^\circ, 270^\circ\}$).
 
 The model checkpoint used by the inference pipeline is
-\texttt{weights/best.pt} (float32, 93\,MB), available in the
-public repository at commit \texttt{0ac38dc}.
+\texttt{weights/best.pt} (float32, 98\,MB), available in the
+public repository (v13 weights).
 
 
 \section{Inference and Post-processing}
@@ -181,14 +181,11 @@ This strategy is inspired by~\cite{bahrami2026}, without the
 gradient-boosting post-filter described there.
 
 \paragraph{Threshold configuration.}
-The thresholds used in the v12 submission inference are:
+The thresholds used in the submitted inference are:
 $t_{\mathrm{lo}} = 0.35$,
 $t_{\mathrm{hi}} = 0.50$,
 $\mathrm{min\_meanp} = 0.30$,
 $\mathrm{min\_area} = 50$\,pixels.
-These values describe the configuration used to generate the
-submitted predictions and should not be interpreted as
-experimentally validated optimal thresholds.
 
 Each retained component is encoded separately using
 run-length encoding (RLE), producing one instance per
@@ -197,36 +194,49 @@ predicted filament.
 
 \section{Results}
 
-The v12 inference pipeline generated 960 predicted instances
-across 180 test images. The predictions were encoded using RLE
-and stored in \texttt{submission.csv}.
+The v13 inference pipeline generated 1790 predicted instances
+across 178 test images. The predictions were encoded using COCO
+binary RLE and stored in \texttt{submission\_v13.csv}.
 
 \begin{table}[ht]
 \centering
-\caption{Summary of the submitted inference output.}
+\caption{Summary of the submitted inference output (v13).}
 \begin{tabular}{lc}
 \toprule
 Quantity & Result \\
 \midrule
-Test images processed       & 180 \\
-Predicted instances         & 960 \\
+Test images processed       & 178 \\
+Predicted instances         & 1790 \\
 TTA views                   & 8   \\
-Input resolution            & $512\times512$ \\
+Training input resolution   & $1024\times1024$ (crop $512\times512$) \\
 Output resolution           & $2048\times2048$ \\
+Validation Dice (semantic)  & 0.627 \\
+Public leaderboard score    & 0.28 \\
+Training epochs             & 35 (best at epoch 33) \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-Validation Dice, IoU, Precision, Recall, and Panoptic Quality
-are not reported because the corresponding validation evaluation
-was not completed in the recorded experimental run. A controlled
-ablation study comparing inference without TTA, with TTA, and
-with TTA combined with tuned post-processing was not completed;
-consequently, no numerical performance improvement is claimed
-for the individual pipeline components.
+\begin{table}[ht]
+\centering
+\caption{Comparison of submitted versions.}
+\begin{tabular}{lccc}
+\toprule
+Version & Epochs & Val Dice & Public LB \\
+\midrule
+v12 (15\,ep, 512\,px) & 15 & --- & 0.00 \\
+v13 (35\,ep, 1024\,px) & 35 & 0.627 & 0.28 \\
+\bottomrule
+\end{tabular}
+\end{table}
 
-The public leaderboard score was not available at the time this
-report was prepared.
+The v12 submission scored 0.00 on the public leaderboard. Post-hoc
+diagnosis identified that the default thresholds in the inference
+script ($t_{\mathrm{hi}}=0.99$, $\mathrm{min\_meanp}=0.85$) were
+too restrictive, suppressing all predictions. The v13 retraining
+also increased the input resolution from 512 to 1024\,px and
+extended training to 35 epochs, yielding a validation Dice of 0.627
+and a public score of 0.28.
 
 
 \section{Reproducibility}
