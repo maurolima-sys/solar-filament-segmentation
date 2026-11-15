@@ -304,11 +304,13 @@ zero denotes images with no rows in the submission CSV.}
 \label{fig:instance-counts}
 \end{figure}
 
-The earlier v12 submission scored 0.00, while v13 scored 0.28 on the
-public leaderboard. The v13 experiment changed several settings,
-including input resolution, training crops, loss weighting, and
-inference configuration. These changes were not tested in controlled
-ablations, so the contribution of any individual change is unknown.
+The v12 submission scored 0.00 and v13 scored 0.28 on the
+public leaderboard. Both submissions used the same post-processing
+thresholds ($t_{\mathrm{lo}}=0.35$, $t_{\mathrm{hi}}=0.50$,
+$\mathrm{min\_meanp}=0.30$). The v13 experiment also changed input
+resolution, training crops, and loss weighting relative to v12.
+These changes were not tested in controlled ablations, so the
+cause of the score difference is unknown.
 
 \subsection{Qualitative Predictions}
 
