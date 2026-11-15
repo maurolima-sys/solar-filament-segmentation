@@ -89,6 +89,8 @@ and inference notebook reproduce the v13 predictions without retraining.
 - `pipeline.ipynb` — v13 inference and submission validation notebook
 - `report/report.tex` — technical report source
 - `report/report.pdf` — compiled four-page technical report
+- `report/main_ptbr.tex`, `report/referencias_ptbr.bib`, and `report/paper_cientifico_ptbr.pdf` — Brazilian Portuguese ABNT article source, bibliography, and compiled paper
+- `.github/skills/solar-filament-scientific-paper/SKILL.md` — project-specific scientific-paper workflow
 - `requirements.txt` — Python dependencies
 - `weights/best.pt` — exact v13 checkpoint (SHA-256 listed above)
 - `submission_v13.csv` — frozen CSV that received the public score of 0.28

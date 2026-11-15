@@ -211,10 +211,10 @@ def tune_postprocess(prob_maps, gt_masks):
         CFG.update(best)
     """
     grid = dict(
-        t_lo   =[0.25, 0.35, 0.45],
-        t_hi   =[0.90, 0.95, 0.97, 0.99],
-        min_meanp=[0.70, 0.80, 0.85],
-        min_area =[0, 50, 200],
+        t_lo     =[0.20, 0.25, 0.30, 0.35, 0.40, 0.45],
+        t_hi     =[0.45, 0.50, 0.55, 0.60, 0.70, 0.80, 0.90],
+        min_meanp=[0.25, 0.30, 0.40, 0.50, 0.60, 0.70],
+        min_area =[0, 50, 100, 200],
     )
     k_el = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (CFG["close_k"],) * 2)
     best_pq, best_cfg = -1.0, {}

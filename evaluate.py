@@ -1,10 +1,10 @@
 """Validation evaluation for the solar filament segmentation pipeline.
 
 Computes semantic Dice, semantic IoU, and instance-level Panoptic Quality (PQ)
-on the validation split, for three ablation variants:
-  A) No TTA, default thresholds
-  B) 8-view TTA, default thresholds
-  C) 8-view TTA, v12 submission thresholds
+on the validation split, for ablation variants.
+
+Inference uses 1024×1024 input (matching the v13 training and submission
+configuration). CFG["size"] is overridden to 1024 at module load.
 
 The validation split is reconstructed with the same seed and logic used in
 train() so that the same images are evaluated.
@@ -13,11 +13,20 @@ Usage (Kaggle notebook or local with data available):
     python evaluate.py
 
 Outputs a results table to stdout and writes evaluate_results.json.
+
+Note on local PQ: pq_score() treats the GT as a binary mask and re-labels
+connected components, so touching annotated instances merge into one GT
+component. This distorts the local PQ relative to the official evaluator;
+use it for relative comparisons only.
 """
 import json, os, random, cv2, numpy as np, torch
 from scipy import ndimage as ndi
 
 import filament as F
+
+# ── Inference resolution — must match v13 training (1024×1024 crops) ─────────
+# CFG["size"] controls F.small(); override here so all inference uses 1024px.
+F.CFG["size"] = 1024
 
 # ── Checkpoint path ───────────────────────────────────────────────────────────
 # filament.py sets CFG["ckpt"] = "/kaggle/working/best.pt".
@@ -27,18 +36,19 @@ import filament as F
 # F.CFG["ckpt"] = "weights/best.pt"
 
 # ── Ablation configurations ──────────────────────────────────────────────────
+# A_v13_baseline: exact v13 submission parameters, no TTA — use as reference.
 VARIANTS = {
-    "A_no_tta_loose": dict(
+    "A_v13_baseline": dict(
         tta=False,
         t_lo=0.35, t_hi=0.50, min_meanp=0.30, min_area=50,
     ),
-    "B_tta_loose": dict(
+    "B_tta_v13_thresholds": dict(
         tta=True,
         t_lo=0.35, t_hi=0.50, min_meanp=0.30, min_area=50,
     ),
-    "C_tta_mid": dict(
+    "C_tta_permissive": dict(
         tta=True,
-        t_lo=0.25, t_hi=0.45, min_meanp=0.30, min_area=50,
+        t_lo=0.25, t_hi=0.45, min_meanp=0.25, min_area=50,
     ),
     "D_tta_tight": dict(
         tta=True,
@@ -47,11 +57,13 @@ VARIANTS = {
 }
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
-def _predict_prob(model, img_512, tta):
-    """Return (H,W) probability map at 512px."""
-    x = torch.from_numpy(img_512.astype(np.float32))[None, None].to(F.dev)
+def _predict_prob(model, img_path, tta):
+    """Return (H,W) probability map at CFG["size"] px (1024 for v13)."""
+    img = F.load_gray(img_path)
+    img_resized = cv2.resize(img, (F.CFG["size"], F.CFG["size"]), interpolation=cv2.INTER_AREA)
+    x = torch.from_numpy(img_resized.astype(np.float32))[None, None].to(F.dev)
     if tta:
-        return F.tta_predict(model, x)          # already (512,512) numpy
+        return F.tta_predict(model, x)
     with torch.no_grad():
         return torch.sigmoid(model(x))[0, 0].cpu().numpy()
 
@@ -113,12 +125,11 @@ def evaluate():
     print(f"Evaluating on {len(val_items)} validation items "
           f"({len({it[0] for it in val_items})} unique images)\n")
 
-    # Diagnose probability range on first 5 images
-    print("--- prob diagnostics (first 5 val images, TTA) ---")
+    # Diagnose probability range on first 5 images (1024px, no TTA for speed)
+    print(f"--- prob diagnostics (first 5 val images, {F.CFG['size']}px, no TTA) ---")
     for fn, polys, h, w in val_items[:5]:
-        img = F.load_gray(os.path.join(F.CFG["train_dir"], fn))
-        x = torch.from_numpy(F.small(img).astype(np.float32))[None, None].to(F.dev)
-        p = F.tta_predict(model, x)
+        img_path = os.path.join(F.CFG["train_dir"], fn)
+        p = _predict_prob(model, img_path, tta=False)
         print(f"  {fn}: max={p.max():.4f} mean={p.mean():.4f} p95={np.percentile(p,95):.4f}")
     print()
 
@@ -135,11 +146,10 @@ def evaluate():
                 interpolation=cv2.INTER_NEAREST,
             )
 
-            # Probability map
-            img = F.load_gray(os.path.join(F.CFG["train_dir"], fn))
-            img_512 = F.small(img)
-            prob_512 = _predict_prob(model, img_512, vcfg["tta"])
-            prob_full = cv2.resize(prob_512, (O, O),
+            # Probability map at 1024px, upsampled to out_size for post-processing
+            img_path = os.path.join(F.CFG["train_dir"], fn)
+            prob_1024 = _predict_prob(model, img_path, vcfg["tta"])
+            prob_full = cv2.resize(prob_1024, (O, O),
                                    interpolation=cv2.INTER_LINEAR)
 
             # Instance masks
